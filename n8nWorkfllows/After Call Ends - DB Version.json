@@ -1,0 +1,131 @@
+{
+  "name": "After Call Ends - DB Version",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "call-ended",
+        "options": {}
+      },
+      "name": "End Call Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        352
+      ],
+      "id": "9881f82e-4205-43cb-868f-11fc01915359",
+      "webhookId": "784556b4-c04a-4f2c-8b88-5b1f7f24c885"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst report = body.call_report ?? {};\nconst text = report.transcript || report.summary || '';\n\nlet result = {\n  interested: true,\n  confidence: null,\n  reason: 'Default true - no AI result'\n};\n\nif (text.trim()) {\n  try {\n    const response = await this.helpers.httpRequest({\n      method: 'POST',\n      url: 'https://api.openai.com/v1/chat/completions',\n      headers: {\n        Authorization: 'Bearer sk-proj-YOUR_OPENAI_KEY_HERE',\n        'Content-Type': 'application/json'\n      },\n      body: {\n        model: 'gpt-4o-mini',\n        temperature: 0,\n        messages: [\n          { role: 'system', content: 'Return ONLY JSON: {\"interested\": boolean, \"confidence\": number, \"reason\": string}' },\n          { role: 'user', content: text }\n        ]\n      },\n      json: true\n    });\n\n    const content = response.choices?.[0]?.message?.content ?? '{}';\n    result = JSON.parse(content);\n  } catch (e) {\n    result.reason = 'AI failed';\n  }\n}\n\nreturn [{\n  json: {\n    call_date: body.call_date,\n    customer_name: report.extracted_variables?.customer_name,\n    phone: body.to_number,\n    goal: report.extracted_variables?.property_use,\n    preference: report.extracted_variables?.layout_preference,\n    visit_time: report.extracted_variables?.visit_time,\n    summary: report.summary,\n    recording_url: report.recording_url,\n    duration: body.call_duration,\n    interested: result.interested,\n    confidence: result.confidence,\n    reason: result.reason,\n    raw_payload: body\n  }\n}];"
+      },
+      "name": "AI + Transform",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        352
+      ],
+      "id": "ba398a96-b21b-461e-960d-1c1272713ad7"
+    },
+    {
+      "parameters": {
+        "schema": "public",
+        "table": "leads",
+        "options": {}
+      },
+      "name": "Insert into PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        352
+      ],
+      "id": "78fb2c15-5a9c-4bc1-bda6-ca452602f639"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v22.0/1002352509625968/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer EAAMtCU3LsmUBQr5N4DUgs0p2EgLSRBgdst8VpVdTqpBbUx4TU11cZBLPzT6l9mIy5qqAhbAoD1OActZBZBnZCTogB1Ov5OHYVwvf0qm9G8RbrIqHZB4eNUPeVEj06SDHwSli149fY0jxK6L6CJLYEp1gVV3nZALb3e6YZCukzqc8AFQCF6x4whW20d4pNtEA0NsxOn24Ydm5388TP0w2QiV9PlueQWNiowmt2ykIWWIIdBdBiOEc4UfZBSunIJutIIW9UiWuJvVPr7U2glVJY52HBPwyWjgZD"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{$json.phone.replace(/\\\\D/g,'')}}\",\n  \"type\": \"text\",\n  \"text\": {\n    \"body\": \"Thank you {{$json.customer_name || 'for your time'}}. Our team will contact you shortly.\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1856,
+        352
+      ],
+      "name": "Send WhatsApp",
+      "id": "cfe71e2f-e8b0-407d-bb7f-4b7f9cceea29"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "End Call Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI + Transform",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI + Transform": {
+      "main": [
+        [
+          {
+            "node": "Insert into PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert into PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "0aede542-ae0e-4694-a235-48ff99bbb5e7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "95f0102ab8d9455ba603425f2d84b081ba707de23cd11e8e1f84f6863ed392c9"
+  },
+  "id": "dI8pebnTkO5Rz1gXm27ma",
+  "tags": []
+}

@@ -1,0 +1,112 @@
+{
+  "name": "Real Estate Voice AI - Lead Dispatch",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "f5fd2a44-e78e-4a73-896f-0a111f9fa9e7",
+        "formTitle": "Contact us",
+        "formDescription": "We'll call you shortly.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Name"
+            },
+            {
+              "fieldLabel": "Number",
+              "fieldType": "number"
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        -32
+      ],
+      "name": "Form Trigger",
+      "id": "9a77c1ad-0a75-42c2-89b4-9f38fa01b421",
+      "webhookId": "f5fd2a44-e78e-4a73-896f-0a111f9fa9e7"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        176,
+        -32
+      ],
+      "name": "Format Phone",
+      "id": "34a6d03e-e856-4046-879c-5b41441f65d1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://backend.omnidim.io/api/v1/calls/dispatch",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer to8B4aYQdHrTITyuYzfJvVomU6K96NEEYGFmoHqykkQ"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"agent_id\": \"102804\",\n  \"to_number\": \"{{$json.formatted_number}}\",\n  \"from_number_id\": 1720,\n  \"call_context\": {\n    \"name\": \"{{$json.Name}}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        400,
+        -32
+      ],
+      "name": "Dispatch Call",
+      "id": "181e042d-952c-4dbd-981b-a40f7e49a7b0"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Form Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Phone": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "6338a01c-639e-40fc-bf9c-b9cf2c35a350",
+  "meta": {
+    "instanceId": "95f0102ab8d9455ba603425f2d84b081ba707de23cd11e8e1f84f6863ed392c9"
+  },
+  "id": "r1tjilFwdt0nvn-Iguj87",
+  "tags": []
+}

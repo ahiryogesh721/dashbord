@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LeadStage {
+  new
+  contacted
+  visit_scheduled
+  visit_done
+  closed
+  lost
+}
+
+enum InterestLabel {
+  hot
+  warm
+  cold
+}
+
+enum SiteVisitStatus {
+  scheduled
+  completed
+  cancelled
+  no_show
+}
+
+enum FollowUpStatus {
+  pending
+  completed
+  skipped
+  cancelled
+}
+
+model Lead {
+  id            String         @id @default(uuid()) @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  callDate      DateTime?      @map("call_date")
+  customerName  String?        @map("customer_name")
+  phone         String?
+  goal          String?
+  preference    String?
+  visitTime     String?        @map("visit_time")
+  summary       String?
+  recordingUrl  String?        @map("recording_url")
+  duration      Int?
+  score         Int?
+  interestLabel InterestLabel? @map("interest_label")
+  confidence    Float?
+  aiReason      String?        @map("ai_reason")
+  stage         LeadStage      @default(new)
+  assignedTo    String?        @map("assigned_to") @db.Uuid
+  source        String         @default("voice_ai")
+  rawPayload    Json?          @map("raw_payload")
+
+  salesRep  SalesRep?   @relation("LeadAssignee", fields: [assignedTo], references: [id])
+  siteVisits SiteVisit[]
+  followUps  FollowUp[]
+
+  @@index([phone])
+  @@index([stage])
+  @@index([score])
+  @@index([assignedTo])
+  @@map("leads")
+}
+
+model SalesRep {
+  id           String    @id @default(uuid()) @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  name         String
+  email        String?   @unique
+  phone        String?
+  isActive     Boolean   @default(true) @map("is_active")
+  maxOpenLeads Int       @default(100) @map("max_open_leads")
+
+  leads      Lead[]     @relation("LeadAssignee")
+  siteVisits SiteVisit[] @relation("SiteVisitRep")
+  followUps  FollowUp[] @relation("FollowUpRep")
+
+  @@index([isActive])
+  @@map("sales_reps")
+}
+
+model SiteVisit {
+  id           String          @id @default(uuid()) @db.Uuid
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  leadId       String          @map("lead_id") @db.Uuid
+  repId        String?         @map("rep_id") @db.Uuid
+  scheduledFor DateTime?       @map("scheduled_for")
+  completedAt  DateTime?       @map("completed_at")
+  status       SiteVisitStatus @default(scheduled)
+  notes        String?
+
+  lead Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  rep  SalesRep? @relation("SiteVisitRep", fields: [repId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+  @@index([repId])
+  @@index([status])
+  @@map("site_visits")
+}
+
+model FollowUp {
+  id          String         @id @default(uuid()) @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  leadId      String         @map("lead_id") @db.Uuid
+  repId       String?        @map("rep_id") @db.Uuid
+  dueAt       DateTime       @map("due_at")
+  channel     String         @default("whatsapp")
+  message     String?
+  status      FollowUpStatus @default(pending)
+  completedAt DateTime?      @map("completed_at")
+
+  lead Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  rep  SalesRep? @relation("FollowUpRep", fields: [repId], references: [id], onDelete: SetNull)
+
+  @@index([leadId, status, dueAt])
+  @@index([repId, status])
+  @@map("follow_ups")
+}
