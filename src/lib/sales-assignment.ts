@@ -1,41 +1,59 @@
-import { LeadStage, Prisma } from "@prisma/client";
+import { LeadStage } from "@/lib/domain";
+import { fetchAllSupabaseRows, getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-server";
 
-const OPEN_STAGES = [LeadStage.new, LeadStage.contacted, LeadStage.visit_scheduled];
+const OPEN_STAGES: LeadStage[] = ["new", "contacted", "visit_scheduled"];
+
+type SalesRepRow = {
+  id: string;
+  max_open_leads: number;
+};
+
+type OpenLeadRow = {
+  assigned_to: string | null;
+};
 
 export type SalesAssignmentResult = {
   salesRepId: string | null;
   strategy: "least_loaded" | "overflow_least_loaded" | "no_active_rep";
 };
 
-export async function assignSalesRep(tx: Prisma.TransactionClient): Promise<SalesAssignmentResult> {
-  const reps = await tx.salesRep.findMany({
-    where: { isActive: true },
-    select: { id: true, maxOpenLeads: true },
-    orderBy: { createdAt: "asc" },
-  });
+export async function assignSalesRep(): Promise<SalesAssignmentResult> {
+  const supabase = getSupabaseServerClient();
 
-  if (!reps.length) {
+  const { data: reps, error: repsError } = await supabase
+    .from("sales_reps")
+    .select("id,max_open_leads,created_at")
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+  throwIfSupabaseError("Unable to load active sales reps", repsError);
+
+  const activeReps = (reps ?? []) as SalesRepRow[];
+  if (!activeReps.length) {
     return { salesRepId: null, strategy: "no_active_rep" };
   }
 
-  const loads = await tx.lead.groupBy({
-    by: ["assignedTo"],
-    where: {
-      assignedTo: { in: reps.map((rep) => rep.id) },
-      stage: { in: OPEN_STAGES },
-    },
-    _count: { _all: true },
-  });
+  const repIds = activeReps.map((rep) => rep.id);
+  const openLeadRows = await fetchAllSupabaseRows<OpenLeadRow>(
+    "Unable to load open lead assignments",
+    async (from, to) =>
+      await supabase
+        .from("leads")
+        .select("assigned_to")
+        .in("assigned_to", repIds)
+        .in("stage", OPEN_STAGES)
+        .range(from, to),
+  );
 
   const loadByRep = new Map<string, number>();
-  for (const load of loads) {
-    if (load.assignedTo) {
-      loadByRep.set(load.assignedTo, load._count._all);
+  for (const row of openLeadRows) {
+    const assignedTo = row.assigned_to;
+    if (assignedTo) {
+      loadByRep.set(assignedTo, (loadByRep.get(assignedTo) ?? 0) + 1);
     }
   }
 
-  const eligible = reps.filter((rep) => (loadByRep.get(rep.id) ?? 0) < rep.maxOpenLeads);
-  const pool = eligible.length > 0 ? eligible : reps;
+  const eligible = activeReps.filter((rep) => (loadByRep.get(rep.id) ?? 0) < rep.max_open_leads);
+  const pool = eligible.length > 0 ? eligible : activeReps;
 
   pool.sort((a, b) => {
     const loadDiff = (loadByRep.get(a.id) ?? 0) - (loadByRep.get(b.id) ?? 0);

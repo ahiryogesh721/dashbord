@@ -1,4 +1,4 @@
-import { InterestLabel } from "@prisma/client";
+import { InterestLabel } from "@/lib/domain";
 
 export type LeadScoreResult = {
   score: number;
@@ -43,9 +43,9 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function labelFromScore(score: number): InterestLabel {
-  if (score >= 75) return InterestLabel.hot;
-  if (score >= 45) return InterestLabel.warm;
-  return InterestLabel.cold;
+  if (score >= 75) return "hot";
+  if (score >= 45) return "warm";
+  return "cold";
 }
 
 export function scoreLead({

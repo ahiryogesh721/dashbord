@@ -1,6 +1,6 @@
-# Deploy to Vercel (Next.js + Prisma)
+# Deploy to Vercel (Next.js + Supabase)
 
-This project can be deployed directly to Vercel. It needs a PostgreSQL database and two environment variables.
+This project can be deployed directly to Vercel. It uses Supabase Postgres through Supabase API credentials.
 
 ## 1) Prerequisites
 
@@ -12,13 +12,16 @@ This project can be deployed directly to Vercel. It needs a PostgreSQL database 
 
 Set these in Vercel Project Settings -> Environment Variables:
 
-- `DATABASE_URL`: PostgreSQL connection string used by Prisma
+- `NEXT_PUBLIC_SUPABASE_URL`: your Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY`: server-side key for API routes (recommended)
+- Optional fallback: `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
 - `N8N_WEBHOOK_SECRET`: shared secret expected in `x-webhook-secret` header
 
 Example keys only (do not use real secrets in docs):
 
 ```env
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB?schema=public
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 N8N_WEBHOOK_SECRET=your-long-random-secret
 ```
 
@@ -27,22 +30,19 @@ N8N_WEBHOOK_SECRET=your-long-random-secret
 1. Go to Vercel -> `Add New...` -> `Project`
 2. Import your repository
 3. Keep framework as `Next.js` (auto-detected)
-4. Add the two environment variables above
+4. Add the required environment variables above
 5. Click `Deploy`
 
-## 4) Run Prisma Migrations in Production
+## 4) Apply Schema + Seed in Supabase
 
-After the first deploy, run migrations against your production database once:
+For a fresh Supabase project, apply SQL migrations in Supabase SQL Editor:
 
-```powershell
-$env:DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DB?schema=public"
-npx prisma migrate deploy
-```
+- `prisma/migrations/20260212010000_init/migration.sql`
+- `prisma/migrations/20260212184149_first_migrant/migration.sql`
 
 If this is a fresh database, seed initial sales reps:
 
 ```powershell
-$env:DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DB?schema=public"
 npm run prisma:seed
 ```
 
@@ -62,10 +62,4 @@ Update n8n webhook target to:
 ## 7) Ongoing Deploys
 
 - Code push -> Vercel auto-deploys
-- For schema changes, run again:
-
-```powershell
-$env:DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DB?schema=public"
-npx prisma migrate deploy
-```
-
+- For schema changes, run new SQL migrations in Supabase and redeploy.

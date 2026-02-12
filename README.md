@@ -5,7 +5,7 @@ This repository now includes a Next.js backend foundation for moving lead lifecy
 ## What Is Implemented
 
 - Next.js API backend scaffold (TypeScript, App Router)
-- Prisma + PostgreSQL data model
+- Supabase PostgreSQL-backed data model
 - `POST /api/webhooks/call-ended` for n8n handoff
 - Lead scoring engine (`0-100`, hot/warm/cold)
 - Sales rep assignment (least-loaded active rep)
@@ -34,25 +34,21 @@ npm install
 cp .env.example .env
 ```
 
-3. Generate Prisma client:
+3. Apply database schema in Supabase:
 
 ```bash
-npm run prisma:generate
+# Run SQL from:
+# prisma/migrations/20260212010000_init/migration.sql
+# prisma/migrations/20260212184149_first_migrant/migration.sql
 ```
 
-4. Run migrations:
-
-```bash
-npm run prisma:migrate
-```
-
-5. Seed sales reps:
+4. Seed sales reps:
 
 ```bash
 npm run prisma:seed
 ```
 
-6. Start API server:
+5. Start API server:
 
 ```bash
 npm run dev

@@ -1,7 +1,7 @@
-import { InterestLabel, LeadStage } from "@prisma/client";
+import { InterestLabel, LeadStage } from "@/lib/domain";
 
 export function initialLeadStage(visitTime?: string | null): LeadStage {
-  return visitTime?.trim() ? LeadStage.visit_scheduled : LeadStage.new;
+  return visitTime?.trim() ? "visit_scheduled" : "new";
 }
 
 export function followUpDueAt({
@@ -15,17 +15,17 @@ export function followUpDueAt({
 }): Date {
   const dueAt = new Date(now);
 
-  if (stage === LeadStage.visit_scheduled) {
+  if (stage === "visit_scheduled") {
     dueAt.setHours(dueAt.getHours() + 6);
     return dueAt;
   }
 
-  if (interestLabel === InterestLabel.hot) {
+  if (interestLabel === "hot") {
     dueAt.setHours(dueAt.getHours() + 2);
     return dueAt;
   }
 
-  if (interestLabel === InterestLabel.warm) {
+  if (interestLabel === "warm") {
     dueAt.setHours(dueAt.getHours() + 24);
     return dueAt;
   }

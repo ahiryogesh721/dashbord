@@ -1,46 +1,71 @@
-import { PrismaClient } from "@prisma/client";
+import { createClient } from "@supabase/supabase-js";
 
-const prisma = new PrismaClient();
+import { Database } from "../src/lib/supabase-types";
 
 const initialSalesReps = [
   {
     name: "Sarah Miller",
     email: "sarah.miller@example.com",
     phone: "+15550000001",
-    maxOpenLeads: 80,
+    max_open_leads: 80,
   },
   {
     name: "David Khan",
     email: "david.khan@example.com",
     phone: "+15550000002",
-    maxOpenLeads: 80,
+    max_open_leads: 80,
   },
 ];
 
+function resolveSupabaseConfig(): { url: string; key: string } {
+  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.SUPABASE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    throw new Error(
+      "Missing Supabase configuration. Set SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL and one of SUPABASE_SERVICE_ROLE_KEY, SUPABASE_KEY, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY, NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+    );
+  }
+
+  return { url, key };
+}
+
 async function main(): Promise<void> {
+  const { url, key } = resolveSupabaseConfig();
+  const supabase = createClient<Database>(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+
   for (const rep of initialSalesReps) {
-    await prisma.salesRep.upsert({
-      where: { email: rep.email },
-      update: {
-        name: rep.name,
-        phone: rep.phone,
-        maxOpenLeads: rep.maxOpenLeads,
-        isActive: true,
-      },
-      create: {
+    const { error } = await supabase.from("sales_reps").upsert(
+      {
         ...rep,
-        isActive: true,
+        is_active: true,
       },
-    });
+      {
+        onConflict: "email",
+      },
+    );
+
+    if (error) {
+      throw new Error(`Failed to upsert rep ${rep.email}: ${error.message}`);
+    }
   }
 }
 
 main()
-  .then(async () => {
-    await prisma.$disconnect();
+  .then(() => {
+    console.log("Seed completed");
   })
-  .catch(async (error) => {
+  .catch((error) => {
     console.error("Seed failed", error);
-    await prisma.$disconnect();
     process.exit(1);
   });

@@ -1,16 +1,16 @@
-import { Prisma } from "@prisma/client";
-
+import { InterestLabel, LeadStage } from "@/lib/domain";
 import { buildFollowUpMessage, followUpDueAt, initialLeadStage } from "@/lib/lifecycle";
 import { normalizeCallEndedPayload } from "@/lib/call-ended-payload";
 import { scoreLead } from "@/lib/lead-scoring";
-import { prisma } from "@/lib/prisma";
 import { assignSalesRep } from "@/lib/sales-assignment";
+import { getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-server";
+import { Json } from "@/lib/supabase-types";
 
-function parseCallDate(value: string | Date | null | undefined): Date | null {
+function parseCallDate(value: string | Date | null | undefined): string | null {
   if (!value) return null;
 
   const parsed = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
 function nullableText(value: string | null | undefined): string | null {
@@ -21,18 +21,33 @@ function nullableText(value: string | null | undefined): string | null {
 type ProcessedCallEndedEvent = {
   leadId: string;
   score: number;
-  interestLabel: "hot" | "warm" | "cold";
-  stage: "new" | "contacted" | "visit_scheduled" | "visit_done" | "closed" | "lost";
+  interestLabel: InterestLabel;
+  stage: LeadStage;
   assignedTo: string | null;
   assignmentStrategy: "least_loaded" | "overflow_least_loaded" | "no_active_rep";
   followUpId: string;
   followUpDueAt: string;
 };
 
+type InsertedLeadRow = {
+  id: string;
+  score: number | null;
+  interest_label: InterestLabel | null;
+  stage: LeadStage;
+  assigned_to: string | null;
+  customer_name: string | null;
+};
+
+type InsertedFollowUpRow = {
+  id: string;
+  due_at: string;
+};
+
 export async function processCallEndedEvent(input: unknown): Promise<ProcessedCallEndedEvent> {
   const payload = normalizeCallEndedPayload(input);
   const report = payload.call_report ?? {};
   const extracted = report.extracted_variables ?? {};
+  const supabase = getSupabaseServerClient();
 
   const scoreResult = scoreLead({
     transcript: report.transcript,
@@ -47,57 +62,71 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
     interestLabel: scoreResult.interestLabel,
     stage,
   });
+  const assignment = await assignSalesRep();
+  const rawPayload = JSON.parse(JSON.stringify(payload)) as Json;
 
-  const { lead, followUp, assignmentStrategy } = await prisma.$transaction(async (tx) => {
-    const assignment = await assignSalesRep(tx);
+  const { data: leadData, error: leadError } = await supabase
+    .from("leads")
+    .insert({
+      call_date: parseCallDate(payload.call_date),
+      customer_name: nullableText(extracted.customer_name),
+      phone: nullableText(payload.to_number),
+      goal: nullableText(extracted.property_use),
+      preference: nullableText(extracted.layout_preference),
+      visit_time: nullableText(extracted.visit_time),
+      summary: nullableText(report.summary),
+      recording_url: nullableText(report.recording_url),
+      duration: payload.call_duration ?? null,
+      score: scoreResult.score,
+      interest_label: scoreResult.interestLabel,
+      confidence: scoreResult.confidence,
+      ai_reason: scoreResult.reason,
+      stage,
+      assigned_to: assignment.salesRepId,
+      source: "voice_ai",
+      raw_payload: rawPayload,
+    })
+    .select("id,score,interest_label,stage,assigned_to,customer_name")
+    .single();
+  throwIfSupabaseError("Failed to create lead", leadError);
 
-    const lead = await tx.lead.create({
-      data: {
-        callDate: parseCallDate(payload.call_date),
-        customerName: nullableText(extracted.customer_name),
-        phone: nullableText(payload.to_number),
-        goal: nullableText(extracted.property_use),
-        preference: nullableText(extracted.layout_preference),
-        visitTime: nullableText(extracted.visit_time),
-        summary: nullableText(report.summary),
-        recordingUrl: nullableText(report.recording_url),
-        duration: payload.call_duration ?? null,
-        score: scoreResult.score,
-        interestLabel: scoreResult.interestLabel,
-        confidence: scoreResult.confidence,
-        aiReason: scoreResult.reason,
-        stage,
-        assignedTo: assignment.salesRepId,
-        source: "voice_ai",
-        rawPayload: payload as Prisma.JsonObject,
-      },
-    });
+  if (!leadData) {
+    throw new Error("Failed to create lead: no row returned");
+  }
 
-    const followUp = await tx.followUp.create({
-      data: {
-        leadId: lead.id,
-        repId: assignment.salesRepId,
-        dueAt,
-        channel: "whatsapp",
-        message: buildFollowUpMessage(lead.customerName),
-      },
-    });
+  const lead = leadData as InsertedLeadRow;
+  const { data: followUpData, error: followUpError } = await supabase
+    .from("follow_ups")
+    .insert({
+      lead_id: lead.id,
+      rep_id: assignment.salesRepId,
+      due_at: dueAt.toISOString(),
+      channel: "whatsapp",
+      message: buildFollowUpMessage(lead.customer_name),
+    })
+    .select("id,due_at")
+    .single();
 
-    return {
-      lead,
-      followUp,
-      assignmentStrategy: assignment.strategy,
-    };
-  });
+  if (followUpError) {
+    await supabase.from("leads").delete().eq("id", lead.id);
+    throw new Error(`Failed to create follow-up: ${followUpError.message}`);
+  }
+
+  if (!followUpData) {
+    await supabase.from("leads").delete().eq("id", lead.id);
+    throw new Error("Failed to create follow-up: no row returned");
+  }
+
+  const followUp = followUpData as InsertedFollowUpRow;
 
   return {
     leadId: lead.id,
     score: lead.score ?? 0,
-    interestLabel: lead.interestLabel ?? "cold",
+    interestLabel: lead.interest_label ?? "cold",
     stage: lead.stage,
-    assignedTo: lead.assignedTo,
-    assignmentStrategy,
+    assignedTo: lead.assigned_to,
+    assignmentStrategy: assignment.strategy,
     followUpId: followUp.id,
-    followUpDueAt: followUp.dueAt.toISOString(),
+    followUpDueAt: new Date(followUp.due_at).toISOString(),
   };
 }
