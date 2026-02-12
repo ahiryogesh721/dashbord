@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { InterestLabel, LeadStage } from "@/lib/domain";
 import { buildFollowUpMessage, followUpDueAt, initialLeadStage } from "@/lib/lifecycle";
 import { normalizeCallEndedPayload } from "@/lib/call-ended-payload";
@@ -64,10 +66,15 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
   });
   const assignment = await assignSalesRep();
   const rawPayload = JSON.parse(JSON.stringify(payload)) as Json;
+  const nowIso = new Date().toISOString();
+  const leadId = randomUUID();
 
   const { data: leadData, error: leadError } = await supabase
     .from("leads")
     .insert({
+      id: leadId,
+      created_at: nowIso,
+      updated_at: nowIso,
       call_date: parseCallDate(payload.call_date),
       customer_name: nullableText(extracted.customer_name),
       phone: nullableText(payload.to_number),
@@ -95,9 +102,14 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
   }
 
   const lead = leadData as InsertedLeadRow;
+  const followUpId = randomUUID();
+  const followUpNowIso = new Date().toISOString();
   const { data: followUpData, error: followUpError } = await supabase
     .from("follow_ups")
     .insert({
+      id: followUpId,
+      created_at: followUpNowIso,
+      updated_at: followUpNowIso,
       lead_id: lead.id,
       rep_id: assignment.salesRepId,
       due_at: dueAt.toISOString(),

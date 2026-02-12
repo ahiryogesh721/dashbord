@@ -17,7 +17,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ ok: false, error: "Unauthorized webhook request" }, { status: 401 });
     } */
 
-    const body = await request.json();
+    const body = await request.json();/*  */
     const result = await processCallEndedEvent(body);
 
     return NextResponse.json(

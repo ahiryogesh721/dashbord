@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { createClient } from "@supabase/supabase-js";
 
 import { Database } from "../src/lib/supabase-types";
@@ -45,15 +47,35 @@ async function main(): Promise<void> {
   });
 
   for (const rep of initialSalesReps) {
-    const { error } = await supabase.from("sales_reps").upsert(
-      {
+    const nowIso = new Date().toISOString();
+    const existingResponse = await supabase.from("sales_reps").select("id").eq("email", rep.email).maybeSingle();
+    if (existingResponse.error) {
+      throw new Error(`Failed to read rep ${rep.email}: ${existingResponse.error.message}`);
+    }
+
+    let error = null;
+    if (existingResponse.data?.id) {
+      const updateResponse = await supabase
+        .from("sales_reps")
+        .update({
+          name: rep.name,
+          phone: rep.phone,
+          max_open_leads: rep.max_open_leads,
+          is_active: true,
+          updated_at: nowIso,
+        })
+        .eq("id", existingResponse.data.id);
+      error = updateResponse.error;
+    } else {
+      const insertResponse = await supabase.from("sales_reps").insert({
+        id: randomUUID(),
+        created_at: nowIso,
+        updated_at: nowIso,
         ...rep,
         is_active: true,
-      },
-      {
-        onConflict: "email",
-      },
-    );
+      });
+      error = insertResponse.error;
+    }
 
     if (error) {
       throw new Error(`Failed to upsert rep ${rep.email}: ${error.message}`);

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError, z } from "zod";
 
@@ -61,10 +63,14 @@ export async function POST(
 
     const repId = input.rep_id ?? lead.assigned_to ?? null;
     const nextStage = stageFromSiteVisit(input.status);
+    const nowIso = new Date().toISOString();
 
     const siteVisitResponse = await supabase
       .from("site_visits")
       .insert({
+        id: randomUUID(),
+        created_at: nowIso,
+        updated_at: nowIso,
         lead_id: lead.id,
         rep_id: repId,
         status: input.status,
@@ -94,8 +100,12 @@ export async function POST(
     if (input.status === "completed") {
       const dueAt = new Date();
       dueAt.setHours(dueAt.getHours() + 24);
+      const followUpNowIso = new Date().toISOString();
 
       const followUpResponse = await supabase.from("follow_ups").insert({
+        id: randomUUID(),
+        created_at: followUpNowIso,
+        updated_at: followUpNowIso,
         lead_id: lead.id,
         rep_id: repId,
         due_at: dueAt.toISOString(),
