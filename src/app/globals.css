@@ -1,5 +1,25 @@
 :root {
   color-scheme: light;
+  --bg-color: #f6f8fc;
+  --text-color: #121b2f;
+  --muted-text: #52617f;
+  --card-bg: #ffffff;
+  --card-soft-bg: #f8faff;
+  --border-color: #dbe3f4;
+  --accent-color: #2859d6;
+  --danger-color: #b42318;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-color: #0e1424;
+  --text-color: #ebf0ff;
+  --muted-text: #a7b4d1;
+  --card-bg: #161f34;
+  --card-soft-bg: #121a2d;
+  --border-color: #2b3857;
+  --accent-color: #6ea2ff;
+  --danger-color: #ff6b6b;
 }
 
 * {
@@ -9,8 +29,53 @@
 body {
   margin: 0;
   font-family: "Segoe UI", Arial, sans-serif;
-  background: #f6f8fc;
-  color: #121b2f;
+  background: var(--bg-color);
+  color: var(--text-color);
+}
+
+a {
+  color: var(--accent-color);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--bg-color) 90%, transparent);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.topbarInner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.brand {
+  font-weight: 800;
+  text-decoration: none;
+  color: var(--text-color);
+}
+
+.topnav {
+  display: flex;
+  gap: 14px;
+  margin-left: auto;
+}
+
+.topnav a {
+  text-decoration: none;
+  color: var(--muted-text);
+  font-weight: 600;
+}
+
+.topnav a:hover {
+  color: var(--accent-color);
 }
 
 .container {
@@ -34,7 +99,8 @@ ul {
 }
 
 code {
-  background: #eaf0ff;
+  background: var(--card-soft-bg);
+  border: 1px solid var(--border-color);
   padding: 2px 6px;
   border-radius: 4px;
 }
