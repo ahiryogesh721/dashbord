@@ -3,12 +3,9 @@ import { randomUUID } from "node:crypto";
 import { InterestLabel, LeadStage } from "@/lib/domain";
 import { buildFollowUpMessage, followUpDueAt, initialLeadStage } from "@/lib/lifecycle";
 import { normalizeCallEndedPayload } from "@/lib/call-ended-payload";
-import {
-  normalizeCustomerNameToEnglish,
-  normalizeGoalToEnglish,
-  normalizeVisitSchedule,
-} from "@/lib/call-ended-normalization";
+import { normalizeVisitSchedule } from "@/lib/call-ended-normalization";
 import { scoreLead } from "@/lib/lead-scoring";
+import { containsHindi, translateHindiToEnglish } from "@/lib/myHelpers";
 import { assignSalesRep } from "@/lib/sales-assignment";
 import { getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-server";
 import { Json } from "@/lib/supabase-types";
@@ -23,6 +20,35 @@ function parseCallDate(value: string | Date | null | undefined): string | null {
 function nullableText(value: string | null | undefined): string | null {
   const cleaned = value?.trim();
   return cleaned ? cleaned : null;
+}
+
+async function toEnglishOnlyText({
+  englishValue,
+  sourceValue,
+  fieldName,
+}: {
+  englishValue?: string | null;
+  sourceValue?: string | null;
+  fieldName: "customer_name" | "goal";
+}): Promise<string | null> {
+  const alreadyEnglish = nullableText(englishValue);
+  if (alreadyEnglish) return alreadyEnglish;
+
+  const source = nullableText(sourceValue);
+  if (!source) return null;
+
+  if (!containsHindi(source)) {
+    return source;
+  }
+
+  try {
+    const translated = await translateHindiToEnglish(source);
+    return nullableText(translated);
+  } catch (error) {
+    // Keep DB English-only: do not store Hindi text when translation fails.
+    console.warn(`Failed to translate ${fieldName} to English`, error);
+    return null;
+  }
 }
 
 type ProcessedCallEndedEvent = {
@@ -56,15 +82,18 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
   const extracted = report.extracted_variables ?? {};
   const supabase = getSupabaseServerClient();
 
-  const customerName = normalizeCustomerNameToEnglish({
-    customerName: extracted.customer_name,
-    customerNameEnglish: extracted.customer_name_en,
-  });
-
-  const goal = normalizeGoalToEnglish({
-    goal: extracted.property_use,
-    goalEnglish: extracted.property_use_en,
-  });
+  const [customerName, goal] = await Promise.all([
+    toEnglishOnlyText({
+      englishValue: extracted.customer_name_en,
+      sourceValue: extracted.customer_name,
+      fieldName: "customer_name",
+    }),
+    toEnglishOnlyText({
+      englishValue: extracted.property_use_en,
+      sourceValue: extracted.property_use,
+      fieldName: "goal",
+    }),
+  ]);
 
   const visitSchedule = normalizeVisitSchedule({
     rawVisitTime: extracted.visit_time,
