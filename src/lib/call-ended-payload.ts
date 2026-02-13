@@ -3,9 +3,14 @@ import { z } from "zod";
 const extractedVariablesSchema = z
   .object({
     customer_name: z.string().optional().nullable(),
+    customer_name_en: z.string().optional().nullable(),
     property_use: z.string().optional().nullable(),
+    property_use_en: z.string().optional().nullable(),
     layout_preference: z.string().optional().nullable(),
     visit_time: z.string().optional().nullable(),
+    visit_time_en: z.string().optional().nullable(),
+    visit_date: z.union([z.string(), z.date()]).optional().nullable(),
+    visit_datetime: z.union([z.string(), z.date()]).optional().nullable(),
   })
   .partial();
 

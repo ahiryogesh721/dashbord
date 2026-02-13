@@ -16,6 +16,8 @@ export type Database = {
           goal: string | null;
           preference: string | null;
           visit_time: string | null;
+          visit_date: string | null;
+          visit_datetime: string | null;
           summary: string | null;
           recording_url: string | null;
           duration: number | null;
@@ -38,6 +40,8 @@ export type Database = {
           goal?: string | null;
           preference?: string | null;
           visit_time?: string | null;
+          visit_date?: string | null;
+          visit_datetime?: string | null;
           summary?: string | null;
           recording_url?: string | null;
           duration?: number | null;
@@ -60,6 +64,8 @@ export type Database = {
           goal?: string | null;
           preference?: string | null;
           visit_time?: string | null;
+          visit_date?: string | null;
+          visit_datetime?: string | null;
           summary?: string | null;
           recording_url?: string | null;
           duration?: number | null;
@@ -194,4 +200,3 @@ export type Database = {
     CompositeTypes: Record<string, never>;
   };
 };
-

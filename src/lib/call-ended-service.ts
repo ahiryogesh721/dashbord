@@ -3,6 +3,11 @@ import { randomUUID } from "node:crypto";
 import { InterestLabel, LeadStage } from "@/lib/domain";
 import { buildFollowUpMessage, followUpDueAt, initialLeadStage } from "@/lib/lifecycle";
 import { normalizeCallEndedPayload } from "@/lib/call-ended-payload";
+import {
+  normalizeCustomerNameToEnglish,
+  normalizeGoalToEnglish,
+  normalizeVisitSchedule,
+} from "@/lib/call-ended-normalization";
 import { scoreLead } from "@/lib/lead-scoring";
 import { assignSalesRep } from "@/lib/sales-assignment";
 import { getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-server";
@@ -51,15 +56,32 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
   const extracted = report.extracted_variables ?? {};
   const supabase = getSupabaseServerClient();
 
+  const customerName = normalizeCustomerNameToEnglish({
+    customerName: extracted.customer_name,
+    customerNameEnglish: extracted.customer_name_en,
+  });
+
+  const goal = normalizeGoalToEnglish({
+    goal: extracted.property_use,
+    goalEnglish: extracted.property_use_en,
+  });
+
+  const visitSchedule = normalizeVisitSchedule({
+    rawVisitTime: extracted.visit_time,
+    englishVisitTime: extracted.visit_time_en,
+    visitDate: extracted.visit_date,
+    visitDateTime: extracted.visit_datetime,
+  });
+
   const scoreResult = scoreLead({
     transcript: report.transcript,
     summary: report.summary,
-    goal: extracted.property_use,
-    visitTime: extracted.visit_time,
+    goal,
+    visitTime: visitSchedule.visitDateTime ?? visitSchedule.englishText ?? visitSchedule.rawText,
     duration: payload.call_duration,
   });
 
-  const stage = initialLeadStage(extracted.visit_time);
+  const stage = initialLeadStage(visitSchedule.visitDateTime ?? visitSchedule.visitDate ?? visitSchedule.englishText);
   const dueAt = followUpDueAt({
     interestLabel: scoreResult.interestLabel,
     stage,
@@ -76,11 +98,13 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
       created_at: nowIso,
       updated_at: nowIso,
       call_date: parseCallDate(payload.call_date),
-      customer_name: nullableText(extracted.customer_name),
+      customer_name: customerName,
       phone: nullableText(payload.to_number),
-      goal: nullableText(extracted.property_use),
+      goal,
       preference: nullableText(extracted.layout_preference),
-      visit_time: nullableText(extracted.visit_time),
+      visit_time: nullableText(visitSchedule.englishText ?? visitSchedule.rawText),
+      visit_date: visitSchedule.visitDate,
+      visit_datetime: visitSchedule.visitDateTime,
       summary: nullableText(report.summary),
       recording_url: nullableText(report.recording_url),
       duration: payload.call_duration ?? null,
