@@ -45,7 +45,7 @@ async function toEnglishOnlyText({
     const translated = await translateHindiToEnglish(source);
     return nullableText(translated);
   } catch (error) {
-    // Keep DB English-only: do not store Hindi text when translation fails.
+    //  Keep DB English-only: do not store Hindi text when translation fails.
     console.warn(`Failed to translate ${fieldName} to English`, error);
     return null;
   }
