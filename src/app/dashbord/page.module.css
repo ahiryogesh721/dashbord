@@ -1,0 +1,119 @@
+.page {
+  max-width: 1200px;
+  margin: 32px auto;
+  padding: 0 20px 40px;
+}
+
+.header h1 {
+  margin: 0 0 8px;
+}
+
+.header p {
+  margin: 0;
+  color: #47536b;
+}
+
+.status,
+.error {
+  margin-top: 20px;
+  font-weight: 600;
+}
+
+.error {
+  color: #b42318;
+}
+
+.metricsGrid {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.metricCard {
+  background: #ffffff;
+  border: 1px solid #dbe3f4;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.metricCard p {
+  margin: 0 0 4px;
+  color: #54617c;
+  font-size: 0.9rem;
+}
+
+.metricCard strong {
+  font-size: 1.4rem;
+}
+
+.breakdownSection {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.breakdownCard {
+  background: #ffffff;
+  border: 1px solid #dbe3f4;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.breakdownCard h2 {
+  margin: 0 0 10px;
+  font-size: 1.1rem;
+}
+
+.breakdownCard ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.breakdownCard li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed #e5ebf7;
+  padding: 7px 0;
+}
+
+.breakdownCard li:last-child {
+  border-bottom: none;
+}
+
+.tableSection {
+  margin-top: 20px;
+}
+
+.tableSection h2 {
+  margin: 0 0 10px;
+  font-size: 1.1rem;
+}
+
+.tableWrap {
+  background: #fff;
+  border: 1px solid #dbe3f4;
+  border-radius: 10px;
+  overflow: auto;
+}
+
+.tableWrap table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+}
+
+.tableWrap th,
+.tableWrap td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid #edf1fa;
+  font-size: 0.9rem;
+}
+
+.tableWrap th {
+  background: #f6f8fc;
+  font-weight: 700;
+}
