@@ -16,6 +16,9 @@ export default function HomePage() {
         <li>
           <code>GET /api/dashboard/leads</code>
         </li>
+        <li>
+          <code>GET /dashbord</code>
+        </li>
       </ul>
     </main>
   );
