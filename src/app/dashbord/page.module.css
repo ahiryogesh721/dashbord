@@ -56,20 +56,28 @@
   padding: 14px;
 }
 
+.formHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .formHeader h2 {
   margin: 0;
   font-size: 1.05rem;
 }
 
 .formHeader p {
-  margin: 6px 0 12px;
+  margin: 6px 0 0;
   color: var(--muted-text);
 }
 
 .manualLeadForm {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
+  margin-top: 14px;
 }
 
 .manualLeadForm label {
@@ -87,6 +95,16 @@
   background: var(--card-soft-bg);
   color: var(--text-color);
   padding: 9px;
+}
+
+.inputError {
+  border-color: var(--danger-color) !important;
+}
+
+.fieldError {
+  color: var(--danger-color);
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .filters {
@@ -326,8 +344,14 @@
     width: 100%;
   }
 
-  .heroActions button {
+  .heroActions button,
+  .formHeaderRow .secondaryButton {
     flex: 1;
+  }
+
+  .formHeaderRow {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .progressSection {

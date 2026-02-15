@@ -54,6 +54,8 @@ type ManualLeadFormState = {
   interest_label: string;
 };
 
+type ManualLeadFieldErrors = Partial<Record<keyof ManualLeadFormState, string>>;
+
 const PAGE_SIZE = 25;
 const INITIAL_FORM: ManualLeadFormState = {
   customer_name: "",
@@ -78,7 +80,9 @@ export default function DashbordPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [refreshTick, setRefreshTick] = useState(0);
 
+  const [showManualForm, setShowManualForm] = useState(false);
   const [manualLeadForm, setManualLeadForm] = useState<ManualLeadFormState>(INITIAL_FORM);
+  const [manualLeadFieldErrors, setManualLeadFieldErrors] = useState<ManualLeadFieldErrors>({});
   const [manualLeadLoading, setManualLeadLoading] = useState(false);
   const [manualLeadError, setManualLeadError] = useState<string | null>(null);
   const [manualLeadSuccess, setManualLeadSuccess] = useState<string | null>(null);
@@ -193,11 +197,55 @@ export default function DashbordPage() {
     setPage(1);
   }
 
+  function validateManualLeadForm(form: ManualLeadFormState): ManualLeadFieldErrors {
+    const fieldErrors: ManualLeadFieldErrors = {};
+
+    if (!form.customer_name.trim()) {
+      fieldErrors.customer_name = "Name is required.";
+    } else if (form.customer_name.trim().length < 2) {
+      fieldErrors.customer_name = "Name should be at least 2 characters.";
+    }
+
+    const cleanedPhone = form.phone.replace(/\s+/g, "");
+    if (!cleanedPhone) {
+      fieldErrors.phone = "Phone number is required.";
+    } else if (!/^\+?[0-9]{7,15}$/.test(cleanedPhone)) {
+      fieldErrors.phone = "Enter a valid phone number (7-15 digits, optional +).";
+    }
+
+    if (!form.source.trim()) {
+      fieldErrors.source = "Source is required.";
+    }
+
+    if (!form.goal.trim()) {
+      fieldErrors.goal = "Goal is required.";
+    }
+
+    if (!form.preference.trim()) {
+      fieldErrors.preference = "Preference is required.";
+    }
+
+    if (!form.interest_label.trim()) {
+      fieldErrors.interest_label = "Please select interest level.";
+    }
+
+    return fieldErrors;
+  }
+
   async function handleManualLeadSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setManualLeadLoading(true);
     setManualLeadError(null);
     setManualLeadSuccess(null);
+
+    const fieldErrors = validateManualLeadForm(manualLeadForm);
+    setManualLeadFieldErrors(fieldErrors);
+
+    if (Object.keys(fieldErrors).length > 0) {
+      setManualLeadLoading(false);
+      setManualLeadError("Please fix highlighted fields before submitting.");
+      return;
+    }
 
     try {
       const response = await fetch("/api/leads/manual", {
@@ -206,12 +254,12 @@ export default function DashbordPage() {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          customer_name: manualLeadForm.customer_name,
-          phone: manualLeadForm.phone,
-          source: manualLeadForm.source,
-          goal: manualLeadForm.goal || null,
-          preference: manualLeadForm.preference || null,
-          interest_label: manualLeadForm.interest_label || null,
+          customer_name: manualLeadForm.customer_name.trim(),
+          phone: manualLeadForm.phone.replace(/\s+/g, ""),
+          source: manualLeadForm.source.trim(),
+          goal: manualLeadForm.goal.trim(),
+          preference: manualLeadForm.preference.trim(),
+          interest_label: manualLeadForm.interest_label,
         }),
       });
 
@@ -221,7 +269,9 @@ export default function DashbordPage() {
       }
 
       setManualLeadSuccess("Lead created successfully.");
+      setManualLeadFieldErrors({});
       setManualLeadForm(INITIAL_FORM);
+      setShowManualForm(false);
       setPage(1);
       setRefreshTick((value) => value + 1);
     } catch (submitError) {
@@ -259,73 +309,106 @@ export default function DashbordPage() {
       </section>
 
       <section className={styles.formSection}>
-        <div className={styles.formHeader}>
-          <h2>Add Lead Manually</h2>
-          <p>Use this for testing now and for manual entry when leads are received outside automation.</p>
+        <div className={styles.formHeaderRow}>
+          <div className={styles.formHeader}>
+            <h2>Add Lead</h2>
+            <p>Keep the page clean by opening this form only when needed.</p>
+          </div>
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={() => {
+              setShowManualForm((prev) => !prev);
+              setManualLeadError(null);
+              setManualLeadSuccess(null);
+            }}
+            aria-expanded={showManualForm}
+          >
+            {showManualForm ? "Hide Lead Form" : "Add Lead"}
+          </button>
         </div>
 
-        <form className={styles.manualLeadForm} onSubmit={handleManualLeadSubmit}>
-          <label>
-            Name
-            <input
-              required
-              value={manualLeadForm.customer_name}
-              onChange={(event) => setManualLeadForm((state) => ({ ...state, customer_name: event.target.value }))}
-              placeholder="Lead name"
-            />
-          </label>
-          <label>
-            Phone
-            <input
-              required
-              value={manualLeadForm.phone}
-              onChange={(event) => setManualLeadForm((state) => ({ ...state, phone: event.target.value }))}
-              placeholder="+91xxxxxxxxxx"
-            />
-          </label>
-          <label>
-            Source
-            <input
-              value={manualLeadForm.source}
-              onChange={(event) => setManualLeadForm((state) => ({ ...state, source: event.target.value }))}
-              placeholder="manual / meta_ads / website"
-            />
-          </label>
-          <label>
-            Goal
-            <input
-              value={manualLeadForm.goal}
-              onChange={(event) => setManualLeadForm((state) => ({ ...state, goal: event.target.value }))}
-              placeholder="2BHK in Gurugram"
-            />
-          </label>
-          <label>
-            Preference
-            <input
-              value={manualLeadForm.preference}
-              onChange={(event) => setManualLeadForm((state) => ({ ...state, preference: event.target.value }))}
-              placeholder="Budget / area / timeline"
-            />
-          </label>
-          <label>
-            Interest
-            <select
-              value={manualLeadForm.interest_label}
-              onChange={(event) => setManualLeadForm((state) => ({ ...state, interest_label: event.target.value }))}
-            >
-              <option value="">Unset</option>
-              {INTEREST_LABELS.map((interest) => (
-                <option key={interest} value={interest}>
-                  {formatLabel(interest)}
-                </option>
-              ))}
-            </select>
-          </label>
+        {showManualForm && (
+          <form className={styles.manualLeadForm} onSubmit={handleManualLeadSubmit} noValidate>
+            <label>
+              Name
+              <input
+                value={manualLeadForm.customer_name}
+                onChange={(event) =>
+                  setManualLeadForm((state) => ({ ...state, customer_name: event.target.value }))
+                }
+                placeholder="Lead name"
+                className={manualLeadFieldErrors.customer_name ? styles.inputError : ""}
+              />
+              {manualLeadFieldErrors.customer_name && <span className={styles.fieldError}>{manualLeadFieldErrors.customer_name}</span>}
+            </label>
 
-          <button type="submit" className={styles.submitButton} disabled={manualLeadLoading}>
-            {manualLeadLoading ? "Adding..." : "Add Lead"}
-          </button>
-        </form>
+            <label>
+              Phone
+              <input
+                value={manualLeadForm.phone}
+                onChange={(event) => setManualLeadForm((state) => ({ ...state, phone: event.target.value }))}
+                placeholder="+91xxxxxxxxxx"
+                className={manualLeadFieldErrors.phone ? styles.inputError : ""}
+              />
+              {manualLeadFieldErrors.phone && <span className={styles.fieldError}>{manualLeadFieldErrors.phone}</span>}
+            </label>
+
+            <label>
+              Source
+              <input
+                value={manualLeadForm.source}
+                onChange={(event) => setManualLeadForm((state) => ({ ...state, source: event.target.value }))}
+                placeholder="manual / meta_ads / website"
+                className={manualLeadFieldErrors.source ? styles.inputError : ""}
+              />
+              {manualLeadFieldErrors.source && <span className={styles.fieldError}>{manualLeadFieldErrors.source}</span>}
+            </label>
+
+            <label>
+              Goal
+              <input
+                value={manualLeadForm.goal}
+                onChange={(event) => setManualLeadForm((state) => ({ ...state, goal: event.target.value }))}
+                placeholder="2BHK in Gurugram"
+                className={manualLeadFieldErrors.goal ? styles.inputError : ""}
+              />
+              {manualLeadFieldErrors.goal && <span className={styles.fieldError}>{manualLeadFieldErrors.goal}</span>}
+            </label>
+
+            <label>
+              Preference
+              <input
+                value={manualLeadForm.preference}
+                onChange={(event) => setManualLeadForm((state) => ({ ...state, preference: event.target.value }))}
+                placeholder="Budget / area / timeline"
+                className={manualLeadFieldErrors.preference ? styles.inputError : ""}
+              />
+              {manualLeadFieldErrors.preference && <span className={styles.fieldError}>{manualLeadFieldErrors.preference}</span>}
+            </label>
+
+            <label>
+              Interest
+              <select
+                value={manualLeadForm.interest_label}
+                onChange={(event) => setManualLeadForm((state) => ({ ...state, interest_label: event.target.value }))}
+                className={manualLeadFieldErrors.interest_label ? styles.inputError : ""}
+              >
+                <option value="">Select interest</option>
+                {INTEREST_LABELS.map((interest) => (
+                  <option key={interest} value={interest}>
+                    {formatLabel(interest)}
+                  </option>
+                ))}
+              </select>
+              {manualLeadFieldErrors.interest_label && <span className={styles.fieldError}>{manualLeadFieldErrors.interest_label}</span>}
+            </label>
+
+            <button type="submit" className={styles.submitButton} disabled={manualLeadLoading}>
+              {manualLeadLoading ? "Adding..." : "Add Lead"}
+            </button>
+          </form>
+        )}
 
         {manualLeadError && <p className={styles.error}>{manualLeadError}</p>}
         {manualLeadSuccess && <p className={styles.success}>{manualLeadSuccess}</p>}
