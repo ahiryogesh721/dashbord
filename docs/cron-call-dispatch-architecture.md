@@ -1,10 +1,11 @@
-# Cron + API Route Call Dispatch (Option A)
+# Call Dispatch API (n8n-scheduled mode)
 
-This project now supports a backend-driven 5-minute calling engine without requiring n8n for dispatch orchestration.
+This project keeps the call dispatch logic in backend, but **does not run any platform cron jobs**.
+All scheduling should be handled by n8n for now.
 
-## What runs every 5 minutes
-- Vercel Cron hits: `GET /api/jobs/call-dispatch`.
-- Schedule is defined in `vercel.json`.
+## Scheduling source
+- n8n should run every 5 minutes (or your preferred interval).
+- n8n calls: `POST /api/jobs/call-dispatch`.
 
 ## Route behavior
 The route performs two phases:
@@ -35,31 +36,15 @@ The route performs two phases:
 - `OMNI_FROM_NUMBER_ID`
 - Existing Supabase env vars used by this project (`SUPABASE_URL` + key)
 
-## How this works with existing lifecycle logic
-- Existing webhook flow still processes call-ended payloads.
-- Existing follow-up rows continue to drive recall behavior (`due_at`, `status`).
-- Cron route simply executes due work and dispatches calls.
+## n8n workflow recommendation
+- Trigger: `Schedule Trigger` (every 5 minutes)
+- Action: `HTTP Request`
+  - method: `POST`
+  - URL: `https://<your-domain>/api/jobs/call-dispatch`
+  - header: `Authorization: Bearer <CRON_JOB_SECRET>`
 
 ## Operational notes
-- This is idempotent enough for single cron execution cadence, but for high concurrency you should add stronger DB-level claiming/locking.
-- Failed dispatches currently remain `pending` and will be retried on the next run.
+- No Vercel cron and no GitHub Actions cron are enabled.
+- Failed dispatches remain `pending` and are retried on next n8n run.
 - You can test manually with:
-  - `POST /api/jobs/call-dispatch` (add cron secret header).
-
-
-## GitHub Actions alternative (no Vercel Pro cron required)
-You can trigger the same endpoint every 5 minutes using GitHub Actions.
-
-- Workflow file: `.github/workflows/call-dispatch-cron.yml`
-- Schedule: `*/5 * * * *`
-- Method: `POST /api/jobs/call-dispatch`
-- Auth header: `Authorization: Bearer <CRON_JOB_SECRET>`
-
-### GitHub repository secrets to set
-- `CALL_DISPATCH_URL` = `https://<your-domain>/api/jobs/call-dispatch`
-- `CRON_JOB_SECRET` = same secret configured in deployment env
-
-### Notes
-- Includes `workflow_dispatch` so you can run it manually from GitHub Actions UI.
-- Fails the run if HTTP status is not 2xx.
-- Run logs include endpoint response body for easier debugging.
+  - `POST /api/jobs/call-dispatch` (add cron secret header)
