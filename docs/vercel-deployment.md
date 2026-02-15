@@ -63,3 +63,11 @@ Update n8n webhook target to:
 
 - Code push -> Vercel auto-deploys
 - For schema changes, run new SQL migrations in Supabase and redeploy.
+
+## 8) Scheduler
+
+For now, scheduling should run from n8n (not Vercel cron/GitHub Actions cron):
+
+- n8n schedule every 5 minutes
+- n8n HTTP request -> `POST https://<your-domain>/api/jobs/call-dispatch`
+- Header: `Authorization: Bearer <CRON_JOB_SECRET>`
