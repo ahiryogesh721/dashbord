@@ -42,6 +42,7 @@ The route performs two phases:
   - method: `POST`
   - URL: `https://<your-domain>/api/jobs/call-dispatch`
   - header: `Authorization: Bearer <CRON_JOB_SECRET>`
+- Ready import file: `n8nWorkfllows/DB Poll - Call Dispatch Every 5 Min.json`
 
 ## Operational notes
 - No Vercel cron and no GitHub Actions cron are enabled.
