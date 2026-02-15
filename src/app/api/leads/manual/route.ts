@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { ZodError, z } from "zod";
 
@@ -33,7 +34,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     const supabase = getSupabaseServerClient();
 
     const cleanedPhone = input.phone.replace(/\s+/g, "");
+    const nowIso = new Date().toISOString();
     const payload = {
+      id: randomUUID(),
+      created_at: nowIso,
+      updated_at: nowIso,
       customer_name: input.customer_name,
       phone: cleanedPhone,
       source: input.source,
