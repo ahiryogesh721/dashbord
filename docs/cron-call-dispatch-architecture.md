@@ -45,3 +45,21 @@ The route performs two phases:
 - Failed dispatches currently remain `pending` and will be retried on the next run.
 - You can test manually with:
   - `POST /api/jobs/call-dispatch` (add cron secret header).
+
+
+## GitHub Actions alternative (no Vercel Pro cron required)
+You can trigger the same endpoint every 5 minutes using GitHub Actions.
+
+- Workflow file: `.github/workflows/call-dispatch-cron.yml`
+- Schedule: `*/5 * * * *`
+- Method: `POST /api/jobs/call-dispatch`
+- Auth header: `Authorization: Bearer <CRON_JOB_SECRET>`
+
+### GitHub repository secrets to set
+- `CALL_DISPATCH_URL` = `https://<your-domain>/api/jobs/call-dispatch`
+- `CRON_JOB_SECRET` = same secret configured in deployment env
+
+### Notes
+- Includes `workflow_dispatch` so you can run it manually from GitHub Actions UI.
+- Fails the run if HTTP status is not 2xx.
+- Run logs include endpoint response body for easier debugging.
