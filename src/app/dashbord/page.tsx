@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { INTEREST_LABELS, LEAD_STAGES } from "@/lib/domain";
 
@@ -45,7 +45,24 @@ type LeadListData = {
 
 type SortField = "createdAt" | "score" | "customerName";
 
+type ManualLeadFormState = {
+  customer_name: string;
+  phone: string;
+  source: string;
+  goal: string;
+  preference: string;
+  interest_label: string;
+};
+
 const PAGE_SIZE = 25;
+const INITIAL_FORM: ManualLeadFormState = {
+  customer_name: "",
+  phone: "",
+  source: "manual",
+  goal: "",
+  preference: "",
+  interest_label: "",
+};
 
 export default function DashbordPage() {
   const [metrics, setMetrics] = useState<FounderMetrics | null>(null);
@@ -59,6 +76,12 @@ export default function DashbordPage() {
   const [page, setPage] = useState(1);
   const [sortField, setSortField] = useState<SortField>("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  const [manualLeadForm, setManualLeadForm] = useState<ManualLeadFormState>(INITIAL_FORM);
+  const [manualLeadLoading, setManualLeadLoading] = useState(false);
+  const [manualLeadError, setManualLeadError] = useState<string | null>(null);
+  const [manualLeadSuccess, setManualLeadSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -99,7 +122,7 @@ export default function DashbordPage() {
     return () => {
       mounted = false;
     };
-  }, [page, stageFilter, interestFilter]);
+  }, [page, stageFilter, interestFilter, refreshTick]);
 
   const stageBreakdownEntries = useMemo(
     () =>
@@ -126,7 +149,7 @@ export default function DashbordPage() {
         })
       : leads;
 
-    const sorted = [...searched].sort((a, b) => {
+    return [...searched].sort((a, b) => {
       if (sortField === "score") {
         const left = a.score ?? -1;
         const right = b.score ?? -1;
@@ -143,9 +166,15 @@ export default function DashbordPage() {
       const right = new Date(b.createdAt).getTime();
       return sortDir === "asc" ? left - right : right - left;
     });
-
-    return sorted;
   }, [leadData?.leads, search, sortField, sortDir]);
+
+  const visibleAvgScore = useMemo(() => {
+    const scores = filteredLeads.map((lead) => lead.score).filter((score): score is number => typeof score === "number");
+    if (scores.length === 0) return "—";
+
+    const avg = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+    return avg.toFixed(1);
+  }, [filteredLeads]);
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
@@ -155,6 +184,51 @@ export default function DashbordPage() {
 
     setSortField(field);
     setSortDir(field === "customerName" ? "asc" : "desc");
+  }
+
+  function resetFilters() {
+    setStageFilter("");
+    setInterestFilter("");
+    setSearch("");
+    setPage(1);
+  }
+
+  async function handleManualLeadSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setManualLeadLoading(true);
+    setManualLeadError(null);
+    setManualLeadSuccess(null);
+
+    try {
+      const response = await fetch("/api/leads/manual", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          customer_name: manualLeadForm.customer_name,
+          phone: manualLeadForm.phone,
+          source: manualLeadForm.source,
+          goal: manualLeadForm.goal || null,
+          preference: manualLeadForm.preference || null,
+          interest_label: manualLeadForm.interest_label || null,
+        }),
+      });
+
+      const json = (await response.json()) as { ok: boolean; error?: string };
+      if (!response.ok || !json.ok) {
+        throw new Error(json.error ?? "Unable to add manual lead");
+      }
+
+      setManualLeadSuccess("Lead created successfully.");
+      setManualLeadForm(INITIAL_FORM);
+      setPage(1);
+      setRefreshTick((value) => value + 1);
+    } catch (submitError) {
+      setManualLeadError(submitError instanceof Error ? submitError.message : "Unable to create lead");
+    } finally {
+      setManualLeadLoading(false);
+    }
   }
 
   return (
@@ -167,9 +241,94 @@ export default function DashbordPage() {
             exactly where we are right now.
           </p>
         </div>
-        <button type="button" className={styles.refreshButton} onClick={() => setPage(1)}>
-          Refresh Snapshot
-        </button>
+        <div className={styles.heroActions}>
+          <button
+            type="button"
+            className={styles.refreshButton}
+            onClick={() => {
+              setPage(1);
+              setRefreshTick((value) => value + 1);
+            }}
+          >
+            Refresh Snapshot
+          </button>
+          <button type="button" className={styles.secondaryButton} onClick={resetFilters}>
+            Reset Filters
+          </button>
+        </div>
+      </section>
+
+      <section className={styles.formSection}>
+        <div className={styles.formHeader}>
+          <h2>Add Lead Manually</h2>
+          <p>Use this for testing now and for manual entry when leads are received outside automation.</p>
+        </div>
+
+        <form className={styles.manualLeadForm} onSubmit={handleManualLeadSubmit}>
+          <label>
+            Name
+            <input
+              required
+              value={manualLeadForm.customer_name}
+              onChange={(event) => setManualLeadForm((state) => ({ ...state, customer_name: event.target.value }))}
+              placeholder="Lead name"
+            />
+          </label>
+          <label>
+            Phone
+            <input
+              required
+              value={manualLeadForm.phone}
+              onChange={(event) => setManualLeadForm((state) => ({ ...state, phone: event.target.value }))}
+              placeholder="+91xxxxxxxxxx"
+            />
+          </label>
+          <label>
+            Source
+            <input
+              value={manualLeadForm.source}
+              onChange={(event) => setManualLeadForm((state) => ({ ...state, source: event.target.value }))}
+              placeholder="manual / meta_ads / website"
+            />
+          </label>
+          <label>
+            Goal
+            <input
+              value={manualLeadForm.goal}
+              onChange={(event) => setManualLeadForm((state) => ({ ...state, goal: event.target.value }))}
+              placeholder="2BHK in Gurugram"
+            />
+          </label>
+          <label>
+            Preference
+            <input
+              value={manualLeadForm.preference}
+              onChange={(event) => setManualLeadForm((state) => ({ ...state, preference: event.target.value }))}
+              placeholder="Budget / area / timeline"
+            />
+          </label>
+          <label>
+            Interest
+            <select
+              value={manualLeadForm.interest_label}
+              onChange={(event) => setManualLeadForm((state) => ({ ...state, interest_label: event.target.value }))}
+            >
+              <option value="">Unset</option>
+              {INTEREST_LABELS.map((interest) => (
+                <option key={interest} value={interest}>
+                  {formatLabel(interest)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button type="submit" className={styles.submitButton} disabled={manualLeadLoading}>
+            {manualLeadLoading ? "Adding..." : "Add Lead"}
+          </button>
+        </form>
+
+        {manualLeadError && <p className={styles.error}>{manualLeadError}</p>}
+        {manualLeadSuccess && <p className={styles.success}>{manualLeadSuccess}</p>}
       </section>
 
       <section className={styles.filters}>
@@ -229,8 +388,8 @@ export default function DashbordPage() {
             <MetricCard label="Avg Lead Score" value={metrics.avgScore} hint="Scoring quality signal" />
             <MetricCard label="Conversion Rate" value={`${metrics.conversionRate}%`} hint="Closed vs total" />
             <MetricCard label="Follow-ups Today" value={metrics.followUpsDueToday} hint="Pending actions" />
-            <MetricCard label="Visits Scheduled" value={metrics.visits.scheduled} hint="Upcoming site visits" />
-            <MetricCard label="Visits Completed" value={metrics.visits.completed} hint="Completed visits" />
+            <MetricCard label="Visible Leads" value={filteredLeads.length} hint="Current filtered view" />
+            <MetricCard label="Visible Avg Score" value={visibleAvgScore} hint="Current filtered view quality" />
           </section>
 
           <section className={styles.progressSection}>
@@ -303,6 +462,13 @@ export default function DashbordPage() {
                       <td>{new Date(lead.createdAt).toLocaleString()}</td>
                     </tr>
                   ))}
+                  {filteredLeads.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className={styles.emptyRow}>
+                        No leads found with current filters.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

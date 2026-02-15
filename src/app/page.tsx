@@ -20,6 +20,12 @@ export default function HomePage() {
           <code>GET /api/dashboard/leads</code>
         </li>
         <li>
+          <code>POST /api/leads/manual</code>
+        </li>
+        <li>
+          <code>POST /api/jobs/call-dispatch</code>
+        </li>
+        <li>
           <code>GET /dashbord</code>
         </li>
       </ul>

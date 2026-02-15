@@ -21,7 +21,14 @@
   max-width: 780px;
 }
 
-.refreshButton {
+.heroActions {
+  display: flex;
+  gap: 8px;
+}
+
+.refreshButton,
+.secondaryButton,
+.submitButton {
   border: 1px solid var(--border-color);
   background: var(--card-bg);
   color: var(--text-color);
@@ -29,6 +36,57 @@
   font-weight: 600;
   padding: 10px 12px;
   cursor: pointer;
+}
+
+.secondaryButton {
+  background: var(--card-soft-bg);
+}
+
+.submitButton {
+  background: var(--accent-color);
+  color: #fff;
+  border-color: var(--accent-color);
+}
+
+.formSection {
+  margin-top: 18px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.formHeader h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.formHeader p {
+  margin: 6px 0 12px;
+  color: var(--muted-text);
+}
+
+.manualLeadForm {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.manualLeadForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.manualLeadForm input,
+.manualLeadForm select {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-soft-bg);
+  color: var(--text-color);
+  padding: 9px;
 }
 
 .filters {
@@ -59,12 +117,18 @@
 }
 
 .status,
-.error {
+.error,
+.success {
   margin-top: 14px;
 }
 
 .error {
   color: var(--danger-color);
+  font-weight: 700;
+}
+
+.success {
+  color: #1e8e5a;
   font-weight: 700;
 }
 
@@ -201,7 +265,9 @@
 }
 
 .sortButtons button:hover,
-.pagination button:hover {
+.pagination button:hover,
+.refreshButton:hover,
+.secondaryButton:hover {
   border-color: var(--accent-color);
 }
 
@@ -239,6 +305,11 @@
   background: var(--card-soft-bg);
 }
 
+.emptyRow {
+  text-align: center !important;
+  color: var(--muted-text);
+}
+
 .pagination {
   margin-top: 12px;
   display: flex;
@@ -249,6 +320,14 @@
 @media (max-width: 920px) {
   .hero {
     flex-direction: column;
+  }
+
+  .heroActions {
+    width: 100%;
+  }
+
+  .heroActions button {
+    flex: 1;
   }
 
   .progressSection {
