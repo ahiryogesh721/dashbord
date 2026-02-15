@@ -63,3 +63,18 @@ Update n8n webhook target to:
 
 - Code push -> Vercel auto-deploys
 - For schema changes, run new SQL migrations in Supabase and redeploy.
+
+
+## 8) GitHub Actions (optional scheduler alternative)
+
+If you do not want Vercel Pro cron, use GitHub Actions schedule to call:
+
+- `POST https://<your-domain>/api/jobs/call-dispatch`
+- Header: `Authorization: Bearer <CRON_JOB_SECRET>`
+
+Set repository secrets:
+
+- `CALL_DISPATCH_URL`
+- `CRON_JOB_SECRET`
+
+Workflow file exists at `.github/workflows/call-dispatch-cron.yml`.
