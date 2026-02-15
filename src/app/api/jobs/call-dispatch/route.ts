@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { dispatchOmniCall } from "@/lib/omni";
@@ -95,6 +96,9 @@ async function seedFollowUpsForUncalledLeads(): Promise<number> {
   const now = new Date().toISOString();
   const insertResponse = await supabase.from("follow_ups").insert(
     leadsToSeed.map((lead) => ({
+      id: randomUUID(),
+      created_at: now,
+      updated_at: now,
       lead_id: lead.id,
       due_at: now,
       channel: "voice_call",
