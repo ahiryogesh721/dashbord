@@ -1,3 +1,4 @@
+import { PostgrestError } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 import { INTEREST_LABELS, LEAD_STAGES } from "@/lib/domain";
@@ -6,6 +7,38 @@ import { fetchAllSupabaseRows, getSupabaseServerClient, throwIfSupabaseError } f
 type ScoreRow = {
   score: number | null;
 };
+
+async function countRowsWithFallback(
+  context: string,
+  fetchExactCount: () => Promise<{ count: number | null; error: PostgrestError | null }>,
+  fetchPage: (from: number, to: number) => Promise<{ data: { id: string }[] | null; error: PostgrestError | null }>,
+): Promise<number> {
+  const exactCountResponse = await fetchExactCount();
+  if (!exactCountResponse.error) {
+    return exactCountResponse.count ?? 0;
+  }
+
+  const pageSize = 1000;
+  let from = 0;
+  let total = 0;
+
+  while (true) {
+    const to = from + pageSize - 1;
+    const pageResponse = await fetchPage(from, to);
+    throwIfSupabaseError(context, pageResponse.error);
+
+    const rows = pageResponse.data ?? [];
+    total += rows.length;
+
+    if (rows.length < pageSize) {
+      break;
+    }
+
+    from += pageSize;
+  }
+
+  return total;
+}
 
 export async function GET(): Promise<NextResponse> {
   const supabase = getSupabaseServerClient();
@@ -16,54 +49,75 @@ export async function GET(): Promise<NextResponse> {
   const endOfToday = new Date(startOfToday);
   endOfToday.setDate(endOfToday.getDate() + 1);
 
-  const [totalLeadsResponse, closedLeadsResponse, scheduledVisitsResponse, completedVisitsResponse, followUpsDueResponse] =
-    await Promise.all([
-      supabase.from("leads").select("id", { count: "exact", head: true }),
-      supabase.from("leads").select("id", { count: "exact", head: true }).eq("stage", "closed"),
-      supabase.from("site_visits").select("id", { count: "exact", head: true }).eq("status", "scheduled"),
-      supabase.from("site_visits").select("id", { count: "exact", head: true }).eq("status", "completed"),
-      supabase
-        .from("follow_ups")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending")
-        .gte("due_at", startOfToday.toISOString())
-        .lt("due_at", endOfToday.toISOString()),
-    ]);
-
-  throwIfSupabaseError("Unable to count total leads", totalLeadsResponse.error);
-  throwIfSupabaseError("Unable to count closed leads", closedLeadsResponse.error);
-  throwIfSupabaseError("Unable to count scheduled site visits", scheduledVisitsResponse.error);
-  throwIfSupabaseError("Unable to count completed site visits", completedVisitsResponse.error);
-  throwIfSupabaseError("Unable to count follow-ups due today", followUpsDueResponse.error);
-
-  const totalLeads = totalLeadsResponse.count ?? 0;
-  const closedLeads = closedLeadsResponse.count ?? 0;
-  const scheduledVisits = scheduledVisitsResponse.count ?? 0;
-  const completedVisits = completedVisitsResponse.count ?? 0;
-  const followUpsDueToday = followUpsDueResponse.count ?? 0;
+  const [totalLeads, closedLeads, scheduledVisits, completedVisits, followUpsDueToday] = await Promise.all([
+    countRowsWithFallback(
+      "Unable to count total leads",
+      async () => await supabase.from("leads").select("id", { count: "exact", head: true }),
+      async (from, to) => await supabase.from("leads").select("id").range(from, to),
+    ),
+    countRowsWithFallback(
+      "Unable to count closed leads",
+      async () => await supabase.from("leads").select("id", { count: "exact", head: true }).eq("stage", "closed"),
+      async (from, to) => await supabase.from("leads").select("id").eq("stage", "closed").range(from, to),
+    ),
+    countRowsWithFallback(
+      "Unable to count scheduled site visits",
+      async () => await supabase.from("site_visits").select("id", { count: "exact", head: true }).eq("status", "scheduled"),
+      async (from, to) => await supabase.from("site_visits").select("id").eq("status", "scheduled").range(from, to),
+    ),
+    countRowsWithFallback(
+      "Unable to count completed site visits",
+      async () => await supabase.from("site_visits").select("id", { count: "exact", head: true }).eq("status", "completed"),
+      async (from, to) => await supabase.from("site_visits").select("id").eq("status", "completed").range(from, to),
+    ),
+    countRowsWithFallback(
+      "Unable to count follow-ups due today",
+      async () =>
+        await supabase
+          .from("follow_ups")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending")
+          .gte("due_at", startOfToday.toISOString())
+          .lt("due_at", endOfToday.toISOString()),
+      async (from, to) =>
+        await supabase
+          .from("follow_ups")
+          .select("id")
+          .eq("status", "pending")
+          .gte("due_at", startOfToday.toISOString())
+          .lt("due_at", endOfToday.toISOString())
+          .range(from, to),
+    ),
+  ]);
 
   const stageCountResponses = await Promise.all(
-    LEAD_STAGES.map((stage) => supabase.from("leads").select("id", { count: "exact", head: true }).eq("stage", stage)),
+    LEAD_STAGES.map(async (stage) =>
+      await countRowsWithFallback(
+        `Unable to count leads in stage ${stage}`,
+        async () => await supabase.from("leads").select("id", { count: "exact", head: true }).eq("stage", stage),
+        async (from, to) => await supabase.from("leads").select("id").eq("stage", stage).range(from, to),
+      ),
+    ),
   );
   const stageBreakdown: Record<string, number> = {};
   for (let index = 0; index < LEAD_STAGES.length; index += 1) {
     const stage = LEAD_STAGES[index];
-    const response = stageCountResponses[index];
-    throwIfSupabaseError(`Unable to count leads in stage ${stage}`, response.error);
-    stageBreakdown[stage] = response.count ?? 0;
+    stageBreakdown[stage] = stageCountResponses[index] ?? 0;
   }
 
   const interestCountResponses = await Promise.all(
-    INTEREST_LABELS.map((label) =>
-      supabase.from("leads").select("id", { count: "exact", head: true }).eq("interest_label", label),
+    INTEREST_LABELS.map(async (label) =>
+      await countRowsWithFallback(
+        `Unable to count leads with interest label ${label}`,
+        async () => await supabase.from("leads").select("id", { count: "exact", head: true }).eq("interest_label", label),
+        async (from, to) => await supabase.from("leads").select("id").eq("interest_label", label).range(from, to),
+      ),
     ),
   );
   const interestBreakdown: Record<string, number> = {};
   for (let index = 0; index < INTEREST_LABELS.length; index += 1) {
     const label = INTEREST_LABELS[index];
-    const response = interestCountResponses[index];
-    throwIfSupabaseError(`Unable to count leads with interest label ${label}`, response.error);
-    interestBreakdown[label] = response.count ?? 0;
+    interestBreakdown[label] = interestCountResponses[index] ?? 0;
   }
 
   const scoreRows = await fetchAllSupabaseRows<ScoreRow>(
