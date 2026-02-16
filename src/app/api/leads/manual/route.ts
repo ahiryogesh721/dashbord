@@ -26,6 +26,20 @@ type InsertedLeadRow = {
   preference: string | null;
 };
 
+function normalizePhone(phone: string): string {
+  return phone.replace(/\s+/g, "").replace(/-/g, "");
+}
+
+function errorResponse(error: unknown): NextResponse {
+  const message = error instanceof Error ? error.message : "Unknown error";
+
+  if (message.toLowerCase().includes("missing supabase configuration")) {
+    return NextResponse.json({ ok: false, error: "Server is not configured" }, { status: 503 });
+  }
+
+  return NextResponse.json({ ok: false, error: "Internal server error" }, { status: 500 });
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body = await request.json();
@@ -33,7 +47,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const supabase = getSupabaseServerClient();
 
-    const cleanedPhone = input.phone.replace(/\s+/g, "");
+    const cleanedPhone = normalizePhone(input.phone);
     const nowIso = new Date().toISOString();
     const payload = {
       id: randomUUID(),
@@ -48,7 +62,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       stage: "new" as const,
       raw_payload: {
         created_via: "manual_dashboard_form",
-        submitted_at: new Date().toISOString(),
+        submitted_at: nowIso,
       },
     };
 
@@ -62,6 +76,10 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     return NextResponse.json({ ok: true, data: response.data as InsertedLeadRow }, { status: 201 });
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+    }
+
     if (error instanceof ZodError) {
       return NextResponse.json(
         {
@@ -74,6 +92,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     console.error("manual lead creation failed", error);
-    return NextResponse.json({ ok: false, error: "Internal server error" }, { status: 500 });
+    return errorResponse(error);
   }
 }

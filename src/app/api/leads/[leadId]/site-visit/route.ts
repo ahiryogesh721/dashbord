@@ -40,6 +40,15 @@ function stageFromSiteVisit(status: SiteVisitStatus): LeadStage {
   return "contacted";
 }
 
+function errorResponse(error: unknown): NextResponse {
+  const message = error instanceof Error ? error.message : "Unknown error";
+  if (message.toLowerCase().includes("missing supabase configuration")) {
+    return NextResponse.json({ ok: false, error: "Server is not configured" }, { status: 503 });
+  }
+
+  return NextResponse.json({ ok: false, error: "Internal server error" }, { status: 500 });
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ leadId: string }> },
@@ -127,6 +136,10 @@ export async function POST(
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+    }
+
     if (error instanceof ZodError) {
       return NextResponse.json(
         {
@@ -139,6 +152,6 @@ export async function POST(
     }
 
     console.error("site-visit update failed", error);
-    return NextResponse.json({ ok: false, error: "Internal server error" }, { status: 500 });
+    return errorResponse(error);
   }
 }

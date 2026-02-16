@@ -54,6 +54,8 @@ async function countLeadsWithFallback(
     return countResponse.count ?? 0;
   }
 
+  console.warn("Unable to count leads via exact count; falling back to paged count", countResponse.error.message);
+
   const pageSize = 1000;
   let total = 0;
   let from = 0;
@@ -74,6 +76,66 @@ async function countLeadsWithFallback(
   }
 
   return total;
+}
+
+function emptyLeadsResponse(page: number, pageSize: number, reason: string): NextResponse {
+  return NextResponse.json({
+    ok: true,
+    degraded: true,
+    reason,
+    data: {
+      page,
+      pageSize,
+      total: 0,
+      totalPages: 0,
+      leads: [],
+    },
+  });
+}
+
+async function getLeadRowsWithFallback(
+  supabase: ReturnType<typeof getSupabaseServerClient>,
+  filters: LeadFilters,
+  page: number,
+  pageSize: number,
+): Promise<LeadRow[]> {
+  let leadsQuery = supabase
+    .from("leads")
+    .select("id,created_at,customer_name,phone,score,interest_label,stage,source,assigned_to")
+    .order("created_at", { ascending: false })
+    .range((page - 1) * pageSize, page * pageSize - 1);
+
+  leadsQuery = applyLeadFilters(leadsQuery, filters);
+  const leadsResponse = await leadsQuery;
+  throwIfSupabaseError("Unable to load lead list", leadsResponse.error);
+
+  return (leadsResponse.data ?? []) as LeadRow[];
+}
+
+async function loadSalesRepsById(
+  supabase: ReturnType<typeof getSupabaseServerClient>,
+  leadRows: LeadRow[],
+): Promise<Map<string, { name: string; email: string | null }>> {
+  const assignedRepIds = Array.from(
+    new Set(leadRows.map((lead) => lead.assigned_to).filter((repId): repId is string => Boolean(repId))),
+  );
+
+  const repById = new Map<string, { name: string; email: string | null }>();
+  if (assignedRepIds.length === 0) {
+    return repById;
+  }
+
+  const repsResponse = await supabase.from("sales_reps").select("id,name,email").in("id", assignedRepIds);
+  if (repsResponse.error) {
+    console.warn("Unable to load assigned sales reps; returning lead rows without rep details", repsResponse.error.message);
+    return repById;
+  }
+
+  for (const rep of (repsResponse.data ?? []) as SalesRepRow[]) {
+    repById.set(rep.id, { name: rep.name, email: rep.email });
+  }
+
+  return repById;
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -98,58 +160,43 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const { stage, interest_label: interestLabel, assigned_to: assignedTo, page, page_size: pageSize } = parsedQuery.data;
-  const supabase = getSupabaseServerClient();
 
-  const filters: LeadFilters = { stage, interestLabel, assignedTo };
+  try {
+    const supabase = getSupabaseServerClient();
+    const filters: LeadFilters = { stage, interestLabel, assignedTo };
 
-  let leadsQuery = supabase
-    .from("leads")
-    .select("id,created_at,customer_name,phone,score,interest_label,stage,source,assigned_to")
-    .order("created_at", { ascending: false })
-    .range((page - 1) * pageSize, page * pageSize - 1);
-  if (stage) leadsQuery = leadsQuery.eq("stage", stage);
-  if (interestLabel) leadsQuery = leadsQuery.eq("interest_label", interestLabel);
-  if (assignedTo) leadsQuery = leadsQuery.eq("assigned_to", assignedTo);
+    const [total, leadRows] = await Promise.all([
+      countLeadsWithFallback(supabase, filters),
+      getLeadRowsWithFallback(supabase, filters, page, pageSize),
+    ]);
 
-  const [total, leadsResponse] = await Promise.all([countLeadsWithFallback(supabase, filters), leadsQuery]);
-  throwIfSupabaseError("Unable to load lead list", leadsResponse.error);
-  const leadRows = (leadsResponse.data ?? []) as LeadRow[];
+    const repById = await loadSalesRepsById(supabase, leadRows);
 
-  const assignedRepIds = Array.from(
-    new Set(leadRows.map((lead) => lead.assigned_to).filter((repId): repId is string => Boolean(repId))),
-  );
+    const leads = leadRows.map((lead) => ({
+      id: lead.id,
+      createdAt: lead.created_at,
+      customerName: lead.customer_name,
+      phone: lead.phone,
+      score: lead.score,
+      interestLabel: lead.interest_label,
+      stage: lead.stage,
+      source: lead.source,
+      assignedTo: lead.assigned_to,
+      salesRep: lead.assigned_to ? repById.get(lead.assigned_to) ?? null : null,
+    }));
 
-  const repById = new Map<string, { name: string; email: string | null }>();
-  if (assignedRepIds.length > 0) {
-    const repsResponse = await supabase.from("sales_reps").select("id,name,email").in("id", assignedRepIds);
-    throwIfSupabaseError("Unable to load assigned sales reps", repsResponse.error);
-
-    for (const rep of (repsResponse.data ?? []) as SalesRepRow[]) {
-      repById.set(rep.id, { name: rep.name, email: rep.email });
-    }
+    return NextResponse.json({
+      ok: true,
+      data: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+        leads,
+      },
+    });
+  } catch (error) {
+    console.error("dashboard leads endpoint failed; returning degraded response", error);
+    return emptyLeadsResponse(page, pageSize, "lead_data_unavailable");
   }
-
-  const leads = leadRows.map((lead) => ({
-    id: lead.id,
-    createdAt: lead.created_at,
-    customerName: lead.customer_name,
-    phone: lead.phone,
-    score: lead.score,
-    interestLabel: lead.interest_label,
-    stage: lead.stage,
-    source: lead.source,
-    assignedTo: lead.assigned_to,
-    salesRep: lead.assigned_to ? repById.get(lead.assigned_to) ?? null : null,
-  }));
-
-  return NextResponse.json({
-    ok: true,
-    data: {
-      page,
-      pageSize,
-      total,
-      totalPages: Math.ceil(total / pageSize),
-      leads,
-    },
-  });
 }

@@ -111,6 +111,16 @@ async function seedFollowUpsForUncalledLeads(): Promise<number> {
   return leadsToSeed.length;
 }
 
+function internalErrorResponse(error: unknown): NextResponse {
+  const message = error instanceof Error ? error.message : "Unknown error";
+
+  if (message.toLowerCase().includes("missing supabase configuration")) {
+    return NextResponse.json({ ok: false, error: "Server is not configured" }, { status: 503 });
+  }
+
+  return NextResponse.json({ ok: false, error: "Cron dispatch failed" }, { status: 500 });
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   return runDispatch(request);
 }
@@ -124,11 +134,15 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabase = getSupabaseServerClient();
-  const nowIso = new Date().toISOString();
-
   try {
-    const seededFollowUps = await seedFollowUpsForUncalledLeads();
+    const supabase = getSupabaseServerClient();
+    const nowIso = new Date().toISOString();
+    let seededFollowUps = 0;
+    try {
+      seededFollowUps = await seedFollowUpsForUncalledLeads();
+    } catch (error) {
+      console.error("Unable to seed follow-ups; continuing with existing pending items", error);
+    }
 
     const dueFollowUpsResponse = await supabase
       .from("follow_ups")
@@ -176,8 +190,6 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
       const lead = leadById.get(followUp.lead_id);
 
       if (!lead?.phone || lead.stage === "closed" || lead.stage === "lost") {
-        skipped += 1;
-
         const skippedResponse = await supabase
           .from("follow_ups")
           .update({
@@ -187,11 +199,18 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
           .eq("id", followUp.id)
           .eq("status", "pending");
 
-        throwIfSupabaseError(`Unable to mark follow-up ${followUp.id} as skipped`, skippedResponse.error);
+        if (skippedResponse.error) {
+          failed += 1;
+          console.error(`Unable to mark follow-up ${followUp.id} as skipped`, skippedResponse.error);
+        } else {
+          skipped += 1;
+        }
+
         continue;
       }
 
       try {
+        const dispatchAt = new Date().toISOString();
         const omniResult = await dispatchOmniCall({
           toNumber: lead.phone,
           customerName: lead.customer_name,
@@ -203,30 +222,45 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
           .from("follow_ups")
           .update({
             status: "completed",
-            completed_at: new Date().toISOString(),
+            completed_at: dispatchAt,
             channel: "voice_call",
-            message: `Call dispatched via cron at ${new Date().toISOString()}`,
+            message: `Call dispatched via cron at ${dispatchAt}`,
           })
           .eq("id", followUp.id)
           .eq("status", "pending");
 
-        throwIfSupabaseError(`Unable to mark follow-up ${followUp.id} as completed`, followUpUpdateResponse.error);
+        if (followUpUpdateResponse.error) {
+          failed += 1;
+          console.error(`Unable to mark follow-up ${followUp.id} as completed`, followUpUpdateResponse.error);
+          continue;
+        }
 
         const payloadUpdate = buildRawPayloadWithDispatchMeta(lead.raw_payload, {
-          last_attempt_at: new Date().toISOString(),
-          last_success_at: new Date().toISOString(),
+          last_attempt_at: dispatchAt,
+          last_success_at: dispatchAt,
           last_request_id: omniResult.requestId,
         });
 
         const leadUpdateResponse = await supabase
           .from("leads")
           .update({
-            stage: (lead.stage === "new" ? "contacted" : lead.stage) as "new" | "contacted" | "visit_scheduled" | "visit_done" | "closed" | "lost",
+            stage: (lead.stage === "new" ? "contacted" : lead.stage) as
+              | "new"
+              | "contacted"
+              | "visit_scheduled"
+              | "visit_done"
+              | "closed"
+              | "lost",
             raw_payload: payloadUpdate,
           })
           .eq("id", lead.id);
 
-        throwIfSupabaseError(`Unable to update dispatch metadata for lead ${lead.id}`, leadUpdateResponse.error);
+        if (leadUpdateResponse.error) {
+          failed += 1;
+          console.error(`Unable to update dispatch metadata for lead ${lead.id}`, leadUpdateResponse.error);
+          continue;
+        }
+
         dispatched += 1;
       } catch (error) {
         failed += 1;
@@ -246,6 +280,6 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
     });
   } catch (error) {
     console.error("call-dispatch cron failed", error);
-    return NextResponse.json({ ok: false, error: "Cron dispatch failed" }, { status: 500 });
+    return internalErrorResponse(error);
   }
 }

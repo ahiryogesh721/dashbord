@@ -11,6 +11,16 @@ function verifyWebhookSecret(request: NextRequest): boolean {
   return incoming === sharedSecret;
 }
 
+function errorResponse(error: unknown): NextResponse {
+  const message = error instanceof Error ? error.message : "Unknown error";
+
+  if (message.toLowerCase().includes("missing supabase configuration")) {
+    return NextResponse.json({ ok: false, error: "Server is not configured" }, { status: 503 });
+  }
+
+  return NextResponse.json({ ok: false, error: "Internal server error" }, { status: 500 });
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     if (!verifyWebhookSecret(request)) {
@@ -29,6 +39,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+    }
+
     if (error instanceof ZodError) {
       return NextResponse.json(
         {
@@ -41,6 +55,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     console.error("call-ended webhook processing failed", error);
-    return NextResponse.json({ ok: false, error: "Internal server error" }, { status: 500 });
+    return errorResponse(error);
   }
 }
