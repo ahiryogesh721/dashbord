@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError, z } from "zod";
 
 import { LeadStage, SITE_VISIT_STATUSES, SiteVisitStatus } from "@/lib/domain";
-import { getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-server";
+import { getSupabaseAdminClient, getSupabaseAdminRuntimeInfo, throwIfSupabaseError } from "@/lib/supabase-server";
 
 const paramsSchema = z.object({
   leadId: z.string().uuid(),
@@ -50,8 +50,23 @@ function stageFromSiteVisit(status: SiteVisitStatus, currentStage: LeadStage): L
 
 function errorResponse(error: unknown): NextResponse {
   const message = error instanceof Error ? error.message : "Unknown error";
-  if (message.toLowerCase().includes("missing supabase configuration")) {
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("missing supabase configuration") ||
+    lower.includes("missing supabase admin configuration") ||
+    lower.includes("supabase admin client requires privileged credentials")
+  ) {
     return NextResponse.json({ ok: false, error: "Server is not configured" }, { status: 503 });
+  }
+
+  if (lower.includes("permission denied") || lower.includes("insufficient_privilege")) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Database permissions are misconfigured for Supabase service role.",
+      },
+      { status: 503 },
+    );
   }
 
   return NextResponse.json({ ok: false, error: "Internal server error" }, { status: 500 });
@@ -64,7 +79,8 @@ export async function POST(
   try {
     const parsedParams = paramsSchema.parse(await params);
     const input = siteVisitInputSchema.parse(await request.json());
-    const supabase = getSupabaseServerClient();
+    const runtime = getSupabaseAdminRuntimeInfo();
+    const supabase = getSupabaseAdminClient({ context: "site-visit" });
 
     if (input.status === "scheduled" && !input.scheduled_for) {
       return NextResponse.json(
@@ -81,7 +97,7 @@ export async function POST(
       .select("id,stage,customer_name")
       .eq("id", parsedParams.leadId)
       .maybeSingle();
-    throwIfSupabaseError("Unable to load lead", leadResponse.error);
+    throwIfSupabaseError("Unable to load lead", leadResponse.error, runtime);
 
     const lead = leadResponse.data as LeadLookupRow | null;
     if (!lead) {
@@ -107,7 +123,7 @@ export async function POST(
       })
       .select("id")
       .single();
-    throwIfSupabaseError("Unable to create site visit", siteVisitResponse.error);
+    throwIfSupabaseError("Unable to create site visit", siteVisitResponse.error, runtime);
 
     const siteVisit = siteVisitResponse.data as SiteVisitInsertRow | null;
     if (!siteVisit) {
@@ -122,7 +138,7 @@ export async function POST(
       .eq("id", lead.id)
       .select("id")
       .single();
-    throwIfSupabaseError("Unable to update lead stage", leadUpdateResponse.error);
+    throwIfSupabaseError("Unable to update lead stage", leadUpdateResponse.error, runtime);
 
     if (input.status === "completed") {
       const dueAt = new Date();
@@ -138,7 +154,7 @@ export async function POST(
         channel: "call",
         message: `Post-visit follow-up for ${lead.customer_name || "lead"}`,
       });
-      throwIfSupabaseError("Unable to create post-visit follow-up", followUpResponse.error);
+      throwIfSupabaseError("Unable to create post-visit follow-up", followUpResponse.error, runtime);
     }
 
     return NextResponse.json(
