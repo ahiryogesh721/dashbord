@@ -1,7 +1,8 @@
 import { InterestLabel, LeadStage } from "@/lib/domain";
 
 export function initialLeadStage(visitTime?: string | null): LeadStage {
-  return visitTime?.trim() ? "visit_scheduled" : "new";
+  // A lead that reached call-ended has already been contacted.
+  return visitTime?.trim() ? "visit_scheduled" : "contacted";
 }
 
 export function followUpDueAt({

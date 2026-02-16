@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
+import type { PostgrestError } from "@supabase/supabase-js";
 
 import { InterestLabel, LeadStage } from "@/lib/domain";
+import { consolidateDuplicateLeadsByPhone } from "@/lib/lead-dedupe";
 import { buildFollowUpMessage, followUpDueAt, initialLeadStage } from "@/lib/lifecycle";
 import { normalizeCallEndedPayload } from "@/lib/call-ended-payload";
 import { normalizeCustomerNameToEnglish, normalizeGoalToEnglish, normalizeVisitSchedule } from "@/lib/call-ended-normalization";
 import { scoreLead } from "@/lib/lead-scoring";
 import { containsHindi, translateHindiToEnglish } from "@/lib/myHelpers";
-import { getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-server";
+import { deterministicLeadIdFromPhone, normalizePhoneForStorage } from "@/lib/phone";
+import { getSupabaseAdminClient, throwIfSupabaseError } from "@/lib/supabase-server";
 import { Json } from "@/lib/supabase-types";
 
 function parseCallDate(value: string | Date | null | undefined): string | null {
@@ -72,11 +75,15 @@ type InsertedFollowUpRow = {
   due_at: string;
 };
 
+function isUniqueViolation(error: PostgrestError | null): boolean {
+  return error?.code === "23505";
+}
+
 export async function processCallEndedEvent(input: unknown): Promise<ProcessedCallEndedEvent> {
   const payload = normalizeCallEndedPayload(input);
   const report = payload.call_report ?? {};
   const extracted = report.extracted_variables ?? {};
-  const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseAdminClient({ context: "call-ended" });
 
   const normalizedCustomerName = normalizeCustomerNameToEnglish({
     customerName: extracted.customer_name,
@@ -115,49 +122,90 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
     duration: payload.call_duration,
   });
 
-  const stage = initialLeadStage(visitSchedule.visitDateTime ?? visitSchedule.visitDate ?? visitSchedule.englishText);
+  const stage = initialLeadStage(visitSchedule.visitDateTime);
   const dueAt = followUpDueAt({
     interestLabel: scoreResult.interestLabel,
     stage,
   });
   const rawPayload = JSON.parse(JSON.stringify(payload)) as Json;
   const nowIso = new Date().toISOString();
-  const leadId = randomUUID();
+  const normalizedPhone = normalizePhoneForStorage(payload.to_number);
+  if (!normalizedPhone) {
+    throw new Error("Failed to process call-ended event: missing valid to_number");
+  }
+  const leadPayload = {
+    updated_at: nowIso,
+    call_date: parseCallDate(payload.call_date),
+    customer_name: customerName,
+    phone: normalizedPhone,
+    goal,
+    preference: nullableText(extracted.layout_preference),
+    visit_datetime: visitSchedule.visitDateTime,
+    summary: nullableText(report.summary),
+    recording_url: nullableText(report.recording_url),
+    duration: payload.call_duration ?? null,
+    score: scoreResult.score,
+    interest_label: scoreResult.interestLabel,
+    confidence: scoreResult.confidence,
+    ai_reason: scoreResult.reason,
+    stage,
+    raw_payload: rawPayload,
+  };
 
-  const { data: leadData, error: leadError } = await supabase
-    .from("leads")
-    .insert({
-      id: leadId,
-      created_at: nowIso,
-      updated_at: nowIso,
-      call_date: parseCallDate(payload.call_date),
-      customer_name: customerName,
-      phone: nullableText(payload.to_number),
-      goal,
-      preference: nullableText(extracted.layout_preference),
-      visit_time: nullableText(visitSchedule.englishText ?? visitSchedule.rawText),
-      visit_date: visitSchedule.visitDate,
-      visit_datetime: visitSchedule.visitDateTime,
-      summary: nullableText(report.summary),
-      recording_url: nullableText(report.recording_url),
-      duration: payload.call_duration ?? null,
-      score: scoreResult.score,
-      interest_label: scoreResult.interestLabel,
-      confidence: scoreResult.confidence,
-      ai_reason: scoreResult.reason,
-      stage,
-      source: "voice_ai",
-      raw_payload: rawPayload,
-    })
-    .select("id,score,interest_label,stage,customer_name")
-    .single();
-  throwIfSupabaseError("Failed to create lead", leadError);
+  const existingLeadId = await consolidateDuplicateLeadsByPhone(supabase, normalizedPhone, "call-ended");
+  const isNewLead = !existingLeadId;
+  const leadInsertId = existingLeadId ?? deterministicLeadIdFromPhone(normalizedPhone);
+  let createdLeadThisRequest = false;
 
-  if (!leadData) {
-    throw new Error("Failed to create lead: no row returned");
+  let leadData: InsertedLeadRow | null = null;
+  if (isNewLead) {
+    const insertResponse = await supabase
+      .from("leads")
+      .insert({
+        id: leadInsertId,
+        created_at: nowIso,
+        source: "voice_ai",
+        ...leadPayload,
+      })
+      .select("id,score,interest_label,stage,customer_name")
+      .single();
+
+    if (insertResponse.error && isUniqueViolation(insertResponse.error)) {
+      // Concurrent webhook or previously existing phone row won the race.
+      const recoveredLeadId = await consolidateDuplicateLeadsByPhone(supabase, normalizedPhone, "call-ended-recover");
+      if (!recoveredLeadId) {
+        throw new Error("Failed to recover lead after unique violation");
+      }
+
+      const updateResponse = await supabase
+        .from("leads")
+        .update(leadPayload)
+        .eq("id", recoveredLeadId)
+        .select("id,score,interest_label,stage,customer_name")
+        .single();
+
+      throwIfSupabaseError("Failed to recover and update lead after unique violation", updateResponse.error);
+      leadData = (updateResponse.data ?? null) as InsertedLeadRow | null;
+    } else {
+      throwIfSupabaseError("Failed to create lead", insertResponse.error);
+      leadData = (insertResponse.data ?? null) as InsertedLeadRow | null;
+      createdLeadThisRequest = true;
+    }
+  } else {
+    const updateResponse = await supabase
+      .from("leads")
+      .update(leadPayload)
+      .eq("id", leadInsertId)
+      .select("id,score,interest_label,stage,customer_name")
+      .single();
+    throwIfSupabaseError("Failed to update lead", updateResponse.error);
+    leadData = (updateResponse.data ?? null) as InsertedLeadRow | null;
   }
 
-  const lead = leadData as InsertedLeadRow;
+  if (!leadData) {
+    throw new Error(isNewLead ? "Failed to create lead: no row returned" : "Failed to update lead: no row returned");
+  }
+  const lead = leadData;
   const followUpId = randomUUID();
   const followUpNowIso = new Date().toISOString();
   const { data: followUpData, error: followUpError } = await supabase
@@ -175,12 +223,16 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
     .single();
 
   if (followUpError) {
-    await supabase.from("leads").delete().eq("id", lead.id);
+    if (createdLeadThisRequest) {
+      await supabase.from("leads").delete().eq("id", lead.id);
+    }
     throw new Error(`Failed to create follow-up: ${followUpError.message}`);
   }
 
   if (!followUpData) {
-    await supabase.from("leads").delete().eq("id", lead.id);
+    if (createdLeadThisRequest) {
+      await supabase.from("leads").delete().eq("id", lead.id);
+    }
     throw new Error("Failed to create follow-up: no row returned");
   }
 

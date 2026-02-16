@@ -15,8 +15,6 @@ export type Database = {
           phone: string | null;
           goal: string | null;
           preference: string | null;
-          visit_time: string | null;
-          visit_date: string | null;
           visit_datetime: string | null;
           summary: string | null;
           recording_url: string | null;
@@ -38,8 +36,6 @@ export type Database = {
           phone?: string | null;
           goal?: string | null;
           preference?: string | null;
-          visit_time?: string | null;
-          visit_date?: string | null;
           visit_datetime?: string | null;
           summary?: string | null;
           recording_url?: string | null;
@@ -61,8 +57,6 @@ export type Database = {
           phone?: string | null;
           goal?: string | null;
           preference?: string | null;
-          visit_time?: string | null;
-          visit_date?: string | null;
           visit_datetime?: string | null;
           summary?: string | null;
           recording_url?: string | null;

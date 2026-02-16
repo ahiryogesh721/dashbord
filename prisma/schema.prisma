@@ -42,11 +42,9 @@ model Lead {
   updatedAt     DateTime       @updatedAt @map("updated_at")
   callDate      DateTime?      @map("call_date")
   customerName  String?        @map("customer_name")
-  phone         String?
+  phone         String?        @unique
   goal          String?
   preference    String?
-  visitTime     String?        @map("visit_time")
-  visitDate     DateTime?      @db.Date @map("visit_date")
   visitDateTime DateTime?      @map("visit_datetime")
   summary       String?
   recordingUrl  String?        @map("recording_url")
@@ -62,10 +60,8 @@ model Lead {
   siteVisits SiteVisit[]
   followUps  FollowUp[]
 
-  @@index([phone])
   @@index([stage])
   @@index([score])
-  @@index([visitDate])
   @@index([visitDateTime])
   @@map("leads")
 }

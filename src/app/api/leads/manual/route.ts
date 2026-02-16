@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { ZodError, z } from "zod";
 
 import { INTEREST_LABELS } from "@/lib/domain";
+import { consolidateDuplicateLeadsByPhone } from "@/lib/lead-dedupe";
+import { deterministicLeadIdFromPhone, normalizePhoneForStorage } from "@/lib/phone";
 import { getPrismaServerClient, shouldFallbackToPrisma } from "@/lib/prisma-server";
-import { getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-server";
+import { getSupabaseAdminClient, throwIfSupabaseError } from "@/lib/supabase-server";
 
 const createLeadSchema = z.object({
   customer_name: z.string().trim().min(1).max(120),
@@ -32,8 +35,8 @@ type InsertedLeadRow = {
 
 type CreateManualLeadInput = z.infer<typeof createLeadSchema>;
 
-function normalizePhone(phone: string): string {
-  return phone.replace(/\s+/g, "").replace(/-/g, "");
+function isUniqueViolation(error: PostgrestError | null): boolean {
+  return error?.code === "23505";
 }
 
 async function createManualLeadWithPrisma(
@@ -43,8 +46,23 @@ async function createManualLeadWithPrisma(
 ): Promise<InsertedLeadRow> {
   const prisma = getPrismaServerClient();
 
-  const created = await prisma.lead.create({
-    data: {
+  const created = await prisma.lead.upsert({
+    where: {
+      phone: cleanedPhone,
+    },
+    update: {
+      updatedAt: new Date(nowIso),
+      customerName: input.customer_name,
+      source: input.source,
+      goal: input.goal ?? null,
+      preference: input.preference ?? null,
+      interestLabel: input.interest_label ?? null,
+      rawPayload: {
+        created_via: "manual_dashboard_form",
+        submitted_at: nowIso,
+      },
+    },
+    create: {
       id: randomUUID(),
       createdAt: new Date(nowIso),
       updatedAt: new Date(nowIso),
@@ -112,36 +130,91 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body = await request.json();
     const input = createLeadSchema.parse(body);
-    const cleanedPhone = normalizePhone(input.phone);
+    const cleanedPhone = normalizePhoneForStorage(input.phone);
+    if (!cleanedPhone) {
+      return NextResponse.json({ ok: false, error: "Invalid phone number" }, { status: 400 });
+    }
+
     const nowIso = new Date().toISOString();
 
-    const payload = {
-      id: randomUUID(),
-      created_at: nowIso,
-      updated_at: nowIso,
-      customer_name: input.customer_name,
-      phone: cleanedPhone,
-      source: input.source,
-      goal: input.goal ?? null,
-      preference: input.preference ?? null,
-      interest_label: input.interest_label ?? null,
-      stage: "new" as const,
-      raw_payload: {
-        created_via: "manual_dashboard_form",
-        submitted_at: nowIso,
-      },
-    };
-
     try {
-      const supabase = getSupabaseServerClient();
-      const response = await supabase
+      const supabase = getSupabaseAdminClient({ context: "manual-lead-create" });
+      const existingLeadId = await consolidateDuplicateLeadsByPhone(supabase, cleanedPhone, "manual-lead");
+
+      if (existingLeadId) {
+        const updateResponse = await supabase
+          .from("leads")
+          .update({
+            updated_at: nowIso,
+            customer_name: input.customer_name,
+            source: input.source,
+            goal: input.goal ?? null,
+            preference: input.preference ?? null,
+            interest_label: input.interest_label ?? null,
+            raw_payload: {
+              created_via: "manual_dashboard_form",
+              submitted_at: nowIso,
+            },
+          })
+          .eq("id", existingLeadId)
+          .select("id,created_at,customer_name,phone,source,stage,interest_label,goal,preference")
+          .single();
+
+        throwIfSupabaseError("Unable to update existing manual lead", updateResponse.error);
+        return NextResponse.json({ ok: true, data: updateResponse.data as InsertedLeadRow }, { status: 200 });
+      }
+
+      const insertResponse = await supabase
         .from("leads")
-        .insert(payload)
+        .insert({
+          id: deterministicLeadIdFromPhone(cleanedPhone),
+          created_at: nowIso,
+          updated_at: nowIso,
+          customer_name: input.customer_name,
+          phone: cleanedPhone,
+          source: input.source,
+          goal: input.goal ?? null,
+          preference: input.preference ?? null,
+          interest_label: input.interest_label ?? null,
+          stage: "new" as const,
+          raw_payload: {
+            created_via: "manual_dashboard_form",
+            submitted_at: nowIso,
+          },
+        })
         .select("id,created_at,customer_name,phone,source,stage,interest_label,goal,preference")
         .single();
 
-      throwIfSupabaseError("Unable to create manual lead", response.error);
-      return NextResponse.json({ ok: true, data: response.data as InsertedLeadRow }, { status: 201 });
+      if (insertResponse.error && isUniqueViolation(insertResponse.error)) {
+        const recoveredLeadId = await consolidateDuplicateLeadsByPhone(supabase, cleanedPhone, "manual-lead-recover");
+        if (!recoveredLeadId) {
+          throw new Error("Unable to recover manual lead after unique violation");
+        }
+
+        const recoverUpdateResponse = await supabase
+          .from("leads")
+          .update({
+            updated_at: nowIso,
+            customer_name: input.customer_name,
+            source: input.source,
+            goal: input.goal ?? null,
+            preference: input.preference ?? null,
+            interest_label: input.interest_label ?? null,
+            raw_payload: {
+              created_via: "manual_dashboard_form",
+              submitted_at: nowIso,
+            },
+          })
+          .eq("id", recoveredLeadId)
+          .select("id,created_at,customer_name,phone,source,stage,interest_label,goal,preference")
+          .single();
+
+        throwIfSupabaseError("Unable to recover and update manual lead", recoverUpdateResponse.error);
+        return NextResponse.json({ ok: true, data: recoverUpdateResponse.data as InsertedLeadRow }, { status: 200 });
+      }
+
+      throwIfSupabaseError("Unable to create manual lead", insertResponse.error);
+      return NextResponse.json({ ok: true, data: insertResponse.data as InsertedLeadRow }, { status: 201 });
     } catch (supabaseError) {
       if (!shouldFallbackToPrisma(supabaseError)) {
         throw supabaseError;

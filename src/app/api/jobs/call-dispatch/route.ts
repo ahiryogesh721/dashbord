@@ -7,11 +7,13 @@ import { Json } from "@/lib/supabase-types";
 
 const ACTIVE_LEAD_STAGES = ["new", "contacted", "visit_scheduled"] as const;
 const CALL_BATCH_SIZE = 20;
+const SEED_CANDIDATE_SCAN_LIMIT = CALL_BATCH_SIZE * 20;
 let hasValidatedDispatchDbAccess = false;
 let hasLoggedDispatchRuntimeInfo = false;
 
 type LeadRow = {
   id: string;
+  created_at: string;
   customer_name: string | null;
   phone: string | null;
   source: string;
@@ -110,7 +112,7 @@ async function seedFollowUpsForUncalledLeads(
     .in("stage", [...ACTIVE_LEAD_STAGES])
     .not("phone", "is", null)
     .order("created_at", { ascending: true })
-    .limit(CALL_BATCH_SIZE);
+    .limit(SEED_CANDIDATE_SCAN_LIMIT);
 
   throwIfSupabaseError("Unable to load uncalled leads", leadsResponse.error, runtime);
 
@@ -135,7 +137,7 @@ async function seedFollowUpsForUncalledLeads(
 
   const followUpRows = (existingFollowUpsResponse.data ?? []) as FollowUpLeadIdRow[];
   const hasFollowUp = new Set(followUpRows.map((row) => row.lead_id));
-  const leadsToSeed = leads.filter((lead) => !hasFollowUp.has(lead.id));
+  const leadsToSeed = leads.filter((lead) => !hasFollowUp.has(lead.id)).slice(0, CALL_BATCH_SIZE);
 
   if (leadsToSeed.length === 0) return 0;
 
@@ -217,20 +219,34 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
     const leadIds = Array.from(new Set(dueFollowUps.map((row) => row.lead_id)));
     const leadsResponse = await supabase
       .from("leads")
-      .select("id,customer_name,phone,source,call_date,stage,raw_payload")
+      .select("id,created_at,customer_name,phone,source,call_date,stage,raw_payload")
       .in("id", leadIds);
 
     throwIfSupabaseError("Unable to load lead records", leadsResponse.error, runtime);
 
     const leads = (leadsResponse.data ?? []) as LeadRow[];
     const leadById = new Map(leads.map((lead) => [lead.id, lead]));
+    const orderedDueFollowUps = [...dueFollowUps].sort((a, b) => {
+      const leadA = leadById.get(a.lead_id);
+      const leadB = leadById.get(b.lead_id);
+
+      const createdAtA = leadA?.created_at ? new Date(leadA.created_at).getTime() : Number.MAX_SAFE_INTEGER;
+      const createdAtB = leadB?.created_at ? new Date(leadB.created_at).getTime() : Number.MAX_SAFE_INTEGER;
+      if (createdAtA !== createdAtB) return createdAtA - createdAtB;
+
+      const dueAtA = new Date(a.due_at).getTime();
+      const dueAtB = new Date(b.due_at).getTime();
+      if (dueAtA !== dueAtB) return dueAtA - dueAtB;
+
+      return a.id.localeCompare(b.id);
+    });
 
     let processed = 0;
     let dispatched = 0;
     let skipped = 0;
     let failed = 0;
 
-    for (const followUp of dueFollowUps) {
+    for (const followUp of orderedDueFollowUps) {
       processed += 1;
       const lead = leadById.get(followUp.lead_id);
 

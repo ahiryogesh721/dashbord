@@ -459,6 +459,11 @@ export function normalizeVisitSchedule(input: VisitScheduleInput): NormalizedVis
     visitDate = visitDateTime.slice(0, 10);
   }
 
+  if (!visitDateTime && visitDate) {
+    // Keep a schedulable timestamp even when only a date is extracted.
+    visitDateTime = buildDateTimeIso(visitDate, 12, 0);
+  }
+
   return {
     rawText,
     englishText,
