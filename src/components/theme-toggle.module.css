@@ -1,0 +1,13 @@
+.toggle {
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-color);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toggle:hover {
+  border-color: var(--accent-color);
+}

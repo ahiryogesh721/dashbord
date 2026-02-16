@@ -1,0 +1,376 @@
+.page {
+  max-width: 1250px;
+  margin: 28px auto;
+  padding: 0 20px 50px;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.hero h1 {
+  margin: 0;
+}
+
+.hero p {
+  margin: 10px 0 0;
+  color: var(--muted-text);
+  max-width: 780px;
+}
+
+.heroActions {
+  display: flex;
+  gap: 8px;
+}
+
+.refreshButton,
+.secondaryButton,
+.submitButton {
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-color);
+  border-radius: 10px;
+  font-weight: 600;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.secondaryButton {
+  background: var(--card-soft-bg);
+}
+
+.submitButton {
+  background: var(--accent-color);
+  color: #fff;
+  border-color: var(--accent-color);
+}
+
+.formSection {
+  margin-top: 18px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.formHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.formHeader h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.formHeader p {
+  margin: 6px 0 0;
+  color: var(--muted-text);
+}
+
+.manualLeadForm {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.manualLeadForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.manualLeadForm input,
+.manualLeadForm select {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-soft-bg);
+  color: var(--text-color);
+  padding: 9px;
+}
+
+.phoneInputRow {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.9fr) 1.1fr;
+  gap: 8px;
+}
+
+.inputError {
+  border-color: var(--danger-color) !important;
+}
+
+.fieldError {
+  color: var(--danger-color);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.filters {
+  margin-top: 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.filters select,
+.filters input {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-soft-bg);
+  color: var(--text-color);
+  padding: 9px;
+}
+
+.status,
+.error,
+.success {
+  margin-top: 14px;
+}
+
+.error {
+  color: var(--danger-color);
+  font-weight: 700;
+}
+
+.success {
+  color: #1e8e5a;
+  font-weight: 700;
+}
+
+.metricsGrid {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.metricCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 13px;
+}
+
+.metricCard p {
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 0.88rem;
+}
+
+.metricCard strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.6rem;
+}
+
+.metricCard small {
+  color: var(--muted-text);
+}
+
+.progressSection {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1.8fr 1fr;
+  gap: 10px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.panel h2 {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+}
+
+.progressList,
+.compactList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.progressList li {
+  display: grid;
+  grid-template-columns: 150px 1fr 40px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+}
+
+.stageButton {
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  text-align: left;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.progressTrack {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--card-soft-bg);
+  overflow: hidden;
+}
+
+.progressTrack span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #4c88ff, #2ed3b7);
+}
+
+.compactList li {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--border-color);
+}
+
+.compactList li:last-child {
+  border-bottom: none;
+}
+
+.tableSection {
+  margin-top: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.tableHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tableHeading h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.sortButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.sortButtons button,
+.pagination button {
+  border: 1px solid var(--border-color);
+  background: var(--card-soft-bg);
+  color: var(--text-color);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.sortButtons button:hover,
+.pagination button:hover,
+.refreshButton:hover,
+.secondaryButton:hover {
+  border-color: var(--accent-color);
+}
+
+.tableWrap {
+  margin-top: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: auto;
+}
+
+.tableWrap table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+}
+
+.tableWrap th,
+.tableWrap td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.9rem;
+}
+
+.tableWrap th {
+  background: var(--card-soft-bg);
+}
+
+.badge {
+  display: inline-block;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.78rem;
+  background: var(--card-soft-bg);
+}
+
+.emptyRow {
+  text-align: center !important;
+  color: var(--muted-text);
+}
+
+.pagination {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+@media (max-width: 920px) {
+  .hero {
+    flex-direction: column;
+  }
+
+  .heroActions {
+    width: 100%;
+  }
+
+  .heroActions button,
+  .formHeaderRow .secondaryButton {
+    flex: 1;
+  }
+
+  .formHeaderRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .progressSection {
+    grid-template-columns: 1fr;
+  }
+
+  .progressList li {
+    grid-template-columns: 120px 1fr 35px;
+  }
+}
+
+@media (max-width: 900px) {
+  .phoneInputRow {
+    grid-template-columns: 1fr;
+  }
+}
