@@ -29,6 +29,31 @@ type InsertedLeadRow = {
   preference: string | null;
 };
 
+function normalizePhone(phone: string): string {
+  return phone.replace(/\s+/g, "").replace(/-/g, "");
+}
+
+function errorResponse(error: unknown): NextResponse {
+  const message = error instanceof Error ? error.message : "Unknown error";
+  const lower = message.toLowerCase();
+
+  if (lower.includes("missing supabase configuration")) {
+    return NextResponse.json({ ok: false, error: "Server is not configured" }, { status: 503 });
+  }
+
+  if (lower.includes("permission denied") || lower.includes("insufficient_privilege")) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Server write access is not configured. Set a Supabase service role key for backend APIs.",
+      },
+      { status: 503 },
+    );
+  }
+
+  return NextResponse.json({ ok: false, error: "Internal server error" }, { status: 500 });
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body = await request.json();
@@ -36,7 +61,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const supabase = getSupabaseServerClient();
 
-    const cleanedPhone = input.phone.replace(/\s+/g, "");
+    const cleanedPhone = normalizePhone(input.phone);
     const nowIso = new Date().toISOString();
     const payload = {
       id: randomUUID(),
@@ -51,7 +76,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       stage: "new" as const,
       raw_payload: {
         created_via: "manual_dashboard_form",
-        submitted_at: new Date().toISOString(),
+        submitted_at: nowIso,
       },
     };
 
@@ -81,6 +106,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     console.error("manual lead creation failed", error);
-    return NextResponse.json({ ok: false, error: "Internal server error" }, { status: 500 });
+    return errorResponse(error);
   }
 }
