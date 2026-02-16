@@ -19,18 +19,37 @@ function getRequiredEnv(name: string): string {
   return value;
 }
 
-export async function dispatchOmniCall(input: OmniDispatchInput): Promise<OmniDispatchResult> {
-  const baseUrl = getRequiredEnv("OMNI_BASE_URL").replace(/\/$/, "");
-  const apiKey = getRequiredEnv("OMNI_API_KEY");
-  const agentId = getRequiredEnv("OMNI_AGENT_ID");
-  const fromNumberIdRaw = getRequiredEnv("OMNI_FROM_NUMBER_ID");
-  const fromNumberId = Number(fromNumberIdRaw);
+function resolveDispatchUrl(): string {
+  const directUrl = process.env.OMNI_URL?.trim();
+  if (directUrl) return directUrl;
 
-  if (Number.isNaN(fromNumberId)) {
-    throw new Error("OMNI_FROM_NUMBER_ID must be a number");
+  const baseUrl = process.env.OMNI_BASE_URL?.trim();
+  if (baseUrl) return `${baseUrl.replace(/\/$/, "")}/api/v1/calls/dispatch`;
+
+  throw new Error("Missing required env var: OMNI_URL or OMNI_BASE_URL");
+}
+
+function resolveFromNumberId(): number {
+  const rawFromNumberId = process.env.OMNI_FROM_NUMBER_ID?.trim();
+
+  // Matches the working value from the provided n8n workflow when env var is not set.
+  if (!rawFromNumberId) return 1720;
+
+  const parsed = Number(rawFromNumberId);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+    throw new Error("OMNI_FROM_NUMBER_ID must be an integer");
   }
 
-  const response = await fetch(`${baseUrl}/api/v1/calls/dispatch`, {
+  return parsed;
+}
+
+export async function dispatchOmniCall(input: OmniDispatchInput): Promise<OmniDispatchResult> {
+  const dispatchUrl = resolveDispatchUrl();
+  const apiKey = getRequiredEnv("OMNI_API_KEY");
+  const agentId = getRequiredEnv("OMNI_AGENT_ID");
+  const fromNumberId = resolveFromNumberId();
+
+  const response = await fetch(dispatchUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,

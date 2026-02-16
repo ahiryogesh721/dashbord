@@ -20,8 +20,13 @@ const siteVisitInputSchema = z.object({
 
 type LeadLookupRow = {
   id: string;
+  stage: LeadStage;
   assigned_to: string | null;
   customer_name: string | null;
+};
+
+type SalesRepLookupRow = {
+  id: string;
 };
 
 type SiteVisitInsertRow = {
@@ -34,9 +39,18 @@ function toNullableIsoDate(value?: string | null): string | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-function stageFromSiteVisit(status: SiteVisitStatus): LeadStage {
+function stageFromSiteVisit(status: SiteVisitStatus, currentStage: LeadStage): LeadStage {
+  if (currentStage === "closed" || currentStage === "lost") {
+    return currentStage;
+  }
+
   if (status === "scheduled") return "visit_scheduled";
   if (status === "completed") return "visit_done";
+
+  if (currentStage === "visit_done") {
+    return currentStage;
+  }
+
   return "contacted";
 }
 
@@ -49,9 +63,19 @@ export async function POST(
     const input = siteVisitInputSchema.parse(await request.json());
     const supabase = getSupabaseServerClient();
 
+    if (input.status === "scheduled" && !input.scheduled_for) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "scheduled_for is required when status is scheduled",
+        },
+        { status: 400 },
+      );
+    }
+
     const leadResponse = await supabase
       .from("leads")
-      .select("id,assigned_to,customer_name")
+      .select("id,stage,assigned_to,customer_name")
       .eq("id", parsedParams.leadId)
       .maybeSingle();
     throwIfSupabaseError("Unable to load lead", leadResponse.error);
@@ -62,8 +86,31 @@ export async function POST(
     }
 
     const repId = input.rep_id ?? lead.assigned_to ?? null;
-    const nextStage = stageFromSiteVisit(input.status);
+    if (input.rep_id) {
+      const repResponse = await supabase
+        .from("sales_reps")
+        .select("id")
+        .eq("id", input.rep_id)
+        .eq("is_active", true)
+        .maybeSingle();
+      throwIfSupabaseError("Unable to validate sales rep", repResponse.error);
+
+      const rep = repResponse.data as SalesRepLookupRow | null;
+      if (!rep) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "rep_id must reference an active sales rep",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    const nextStage = stageFromSiteVisit(input.status, lead.stage);
     const nowIso = new Date().toISOString();
+    const completedAtIso =
+      input.status === "completed" ? toNullableIsoDate(input.completed_at) ?? nowIso : toNullableIsoDate(input.completed_at);
 
     const siteVisitResponse = await supabase
       .from("site_visits")
@@ -75,7 +122,7 @@ export async function POST(
         rep_id: repId,
         status: input.status,
         scheduled_for: toNullableIsoDate(input.scheduled_for),
-        completed_at: toNullableIsoDate(input.completed_at),
+        completed_at: completedAtIso,
         notes: input.notes?.trim() || null,
       })
       .select("id")
@@ -127,6 +174,10 @@ export async function POST(
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+    }
+
     if (error instanceof ZodError) {
       return NextResponse.json(
         {

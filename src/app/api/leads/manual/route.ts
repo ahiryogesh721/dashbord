@@ -7,7 +7,10 @@ import { getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-se
 
 const createLeadSchema = z.object({
   customer_name: z.string().trim().min(1).max(120),
-  phone: z.string().trim().min(7).max(24),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^\+?[0-9]{7,15}$/, "Phone must contain 7-15 digits and may start with +"),
   source: z.string().trim().min(2).max(80).default("manual"),
   goal: z.string().trim().max(250).optional().nullable(),
   preference: z.string().trim().max(250).optional().nullable(),
@@ -62,6 +65,10 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     return NextResponse.json({ ok: true, data: response.data as InsertedLeadRow }, { status: 201 });
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+    }
+
     if (error instanceof ZodError) {
       return NextResponse.json(
         {

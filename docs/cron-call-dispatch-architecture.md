@@ -23,17 +23,17 @@ The route performs two phases:
    - Updates lead metadata (`raw_payload.dispatch.*`) and moves stage from `new` to `contacted` on successful dispatch.
 
 ## Security
-- Route requires `CRON_JOB_SECRET` when configured.
+- Route requires `N8N_DISPATCH_SECRET` when configured (fallback: `CRON_JOB_SECRET`).
 - Secret can be sent in either:
   - `Authorization: Bearer <secret>`
-  - `x-cron-secret: <secret>`
+  - `x-n8n-secret: <secret>` (legacy: `x-cron-secret`)
 
 ## Required environment variables
-- `CRON_JOB_SECRET` (recommended)
-- `OMNI_BASE_URL` (example: `https://backend.omnidim.io`)
+- `N8N_DISPATCH_SECRET` (recommended; fallback `CRON_JOB_SECRET`)
+- `OMNI_URL` (preferred; example: `https://backend.omnidim.io/api/v1/calls/dispatch`) or `OMNI_BASE_URL`
 - `OMNI_API_KEY`
 - `OMNI_AGENT_ID`
-- `OMNI_FROM_NUMBER_ID`
+- Optional `OMNI_FROM_NUMBER_ID` (defaults to `1720`)
 - Existing Supabase env vars used by this project (`SUPABASE_URL` + key)
 
 ## n8n workflow recommendation
@@ -41,11 +41,11 @@ The route performs two phases:
 - Action: `HTTP Request`
   - method: `POST`
   - URL: `https://<your-domain>/api/jobs/call-dispatch`
-  - header: `Authorization: Bearer <CRON_JOB_SECRET>`
+  - header: `Authorization: Bearer <N8N_DISPATCH_SECRET>`
 - Ready import file: `n8nWorkfllows/DB Poll - Call Dispatch Every 5 Min.json`
 
 ## Operational notes
 - No Vercel cron and no GitHub Actions cron are enabled.
 - Failed dispatches remain `pending` and are retried on next n8n run.
 - You can test manually with:
-  - `POST /api/jobs/call-dispatch` (add cron secret header)
+  - `POST /api/jobs/call-dispatch` (add dispatch secret header)

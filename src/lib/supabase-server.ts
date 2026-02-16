@@ -31,7 +31,7 @@ function resolveSupabaseConfig(): { url: string; key: string } {
   if (isPublishableKey && !hasWarnedPublishableKey) {
     hasWarnedPublishableKey = true;
     console.warn(
-      "Using a Supabase publishable key for server routes. Writes and reads can fail unless RLS/policies allow anon access. Prefer SUPABASE_SERVICE_ROLE_KEY for backend APIs.",
+      "Using a Supabase publishable key for server routes. Ensure your Supabase RLS/policies allow the needed reads/writes.",
     );
   }
 

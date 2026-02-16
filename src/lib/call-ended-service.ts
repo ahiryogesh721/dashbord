@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { InterestLabel, LeadStage } from "@/lib/domain";
 import { buildFollowUpMessage, followUpDueAt, initialLeadStage } from "@/lib/lifecycle";
 import { normalizeCallEndedPayload } from "@/lib/call-ended-payload";
-import { normalizeVisitSchedule } from "@/lib/call-ended-normalization";
+import { normalizeCustomerNameToEnglish, normalizeGoalToEnglish, normalizeVisitSchedule } from "@/lib/call-ended-normalization";
 import { scoreLead } from "@/lib/lead-scoring";
 import { containsHindi, translateHindiToEnglish } from "@/lib/myHelpers";
 import { assignSalesRep } from "@/lib/sales-assignment";
@@ -31,10 +31,10 @@ async function toEnglishOnlyText({
   sourceValue?: string | null;
   fieldName: "customer_name" | "goal";
 }): Promise<string | null> {
-  const alreadyEnglish = nullableText(englishValue);
-  if (alreadyEnglish) return alreadyEnglish;
+  const preferredValue = nullableText(englishValue);
+  if (preferredValue && !containsHindi(preferredValue)) return preferredValue;
 
-  const source = nullableText(sourceValue);
+  const source = nullableText(sourceValue) ?? preferredValue;
   if (!source) return null;
 
   if (!containsHindi(source)) {
@@ -82,14 +82,23 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
   const extracted = report.extracted_variables ?? {};
   const supabase = getSupabaseServerClient();
 
+  const normalizedCustomerName = normalizeCustomerNameToEnglish({
+    customerName: extracted.customer_name,
+    customerNameEnglish: extracted.customer_name_en,
+  });
+  const normalizedGoal = normalizeGoalToEnglish({
+    goal: extracted.property_use,
+    goalEnglish: extracted.property_use_en,
+  });
+
   const [customerName, goal] = await Promise.all([
     toEnglishOnlyText({
-      englishValue: extracted.customer_name_en,
+      englishValue: normalizedCustomerName,
       sourceValue: extracted.customer_name,
       fieldName: "customer_name",
     }),
     toEnglishOnlyText({
-      englishValue: extracted.property_use_en,
+      englishValue: normalizedGoal,
       sourceValue: extracted.property_use,
       fieldName: "goal",
     }),

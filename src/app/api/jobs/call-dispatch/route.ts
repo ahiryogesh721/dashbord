@@ -30,14 +30,19 @@ type FollowUpLeadIdRow = {
 };
 
 function isAuthorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_JOB_SECRET;
-  if (!secret) return true;
+  // `N8N_DISPATCH_SECRET` is the preferred name.
+  // Keep `CRON_JOB_SECRET` as a backward-compatible fallback.
+  const secret = process.env.N8N_DISPATCH_SECRET ?? process.env.CRON_JOB_SECRET;
+  if (secret === undefined) return true;
+
+  const normalizedSecret = secret.trim();
+  if (!normalizedSecret) return false;
 
   const authHeader = request.headers.get("authorization");
   const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const xSecret = request.headers.get("x-cron-secret");
+  const xSecret = request.headers.get("x-n8n-secret") ?? request.headers.get("x-cron-secret");
 
-  return bearer === secret || xSecret === secret;
+  return bearer === normalizedSecret || xSecret === normalizedSecret;
 }
 
 function buildRawPayloadWithDispatchMeta(existing: Json | null, details: Record<string, string | null>): Json {
@@ -49,7 +54,7 @@ function buildRawPayloadWithDispatchMeta(existing: Json | null, details: Record<
       last_attempt_at: details.last_attempt_at,
       last_success_at: details.last_success_at,
       last_request_id: details.last_request_id,
-      strategy: "cron_due_followup",
+      strategy: "n8n_due_followup",
     },
   };
 }
@@ -205,7 +210,7 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
             status: "completed",
             completed_at: new Date().toISOString(),
             channel: "voice_call",
-            message: `Call dispatched via cron at ${new Date().toISOString()}`,
+            message: `Call dispatched via n8n at ${new Date().toISOString()}`,
           })
           .eq("id", followUp.id)
           .eq("status", "pending");
@@ -245,7 +250,7 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    console.error("call-dispatch cron failed", error);
-    return NextResponse.json({ ok: false, error: "Cron dispatch failed" }, { status: 500 });
+    console.error("call-dispatch failed", error);
+    return NextResponse.json({ ok: false, error: "Dispatch failed" }, { status: 500 });
   }
 }

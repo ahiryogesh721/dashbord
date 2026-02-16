@@ -1,28 +1,40 @@
 # Deploy to Vercel (Next.js + Supabase)
 
-This project can be deployed directly to Vercel. It uses Supabase Postgres through Supabase API credentials.
+This project can be deployed directly to Vercel and uses Supabase Postgres for persistence.
 
 ## 1) Prerequisites
 
 - A Git repository with this project pushed (GitHub/GitLab/Bitbucket)
-- A PostgreSQL database (Neon, Supabase, Railway, RDS, etc.)
+- A Supabase project (or compatible PostgreSQL instance)
 - A Vercel account
 
-## 2) Required Environment Variables
+## 2) Environment Variables
 
 Set these in Vercel Project Settings -> Environment Variables:
 
+- `DATABASE_URL`: connection string used by Prisma migrations/seed
 - `NEXT_PUBLIC_SUPABASE_URL`: your Supabase project URL
-- `SUPABASE_SERVICE_ROLE_KEY`: server-side key for API routes (recommended)
-- Optional fallback: `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
-- `N8N_WEBHOOK_SECRET`: shared secret expected in `x-webhook-secret` header
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`: publishable key used by backend Supabase client in minimal setup
+- `OMNI_URL` (preferred) or `OMNI_BASE_URL` (fallback)
+- `OMNI_API_KEY`, `OMNI_AGENT_ID`
+- Optional `OMNI_FROM_NUMBER_ID` (defaults to `1720`)
+
+Optional hardening variables:
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `N8N_WEBHOOK_SECRET`
+- `N8N_DISPATCH_SECRET` (legacy fallback: `CRON_JOB_SECRET`)
+- Optional for Hindi translation fallback: `OPENAI_API_KEY`
 
 Example keys only (do not use real secrets in docs):
 
 ```env
+DATABASE_URL=postgresql://user:password@host:5432/postgres?sslmode=require
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-N8N_WEBHOOK_SECRET=your-long-random-secret
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your-publishable-key
+OMNI_URL=https://backend.omnidim.io/api/v1/calls/dispatch
+OMNI_API_KEY=your-omni-api-key
+OMNI_AGENT_ID=your-omni-agent-id
+OMNI_FROM_NUMBER_ID=1720
 ```
 
 ## 3) Create the Vercel Project
@@ -30,17 +42,18 @@ N8N_WEBHOOK_SECRET=your-long-random-secret
 1. Go to Vercel -> `Add New...` -> `Project`
 2. Import your repository
 3. Keep framework as `Next.js` (auto-detected)
-4. Add the required environment variables above
+4. Add the environment variables above
 5. Click `Deploy`
 
-## 4) Apply Schema + Seed in Supabase
+## 4) Apply Schema + Seed
 
-For a fresh Supabase project, apply SQL migrations in Supabase SQL Editor:
+Run migrations from this repo so schema stays in sync:
 
-- `prisma/migrations/20260212010000_init/migration.sql`
-- `prisma/migrations/20260212184149_first_migrant/migration.sql`
+```powershell
+npx prisma migrate deploy
+```
 
-If this is a fresh database, seed initial sales reps:
+Then seed initial sales reps:
 
 ```powershell
 npm run prisma:seed
@@ -51,7 +64,7 @@ npm run prisma:seed
 Update n8n webhook target to:
 
 - `POST https://<your-vercel-domain>/api/webhooks/call-ended`
-- Header: `x-webhook-secret: <same value as N8N_WEBHOOK_SECRET>`
+- Optional header: `x-webhook-secret: <same value as N8N_WEBHOOK_SECRET>` if secret is configured
 
 ## 6) Verify Deployment
 
@@ -62,15 +75,13 @@ Update n8n webhook target to:
 ## 7) Ongoing Deploys
 
 - Code push -> Vercel auto-deploys
-- For schema changes, run new SQL migrations in Supabase and redeploy.
-
-
+- For schema changes, run `npx prisma migrate deploy` against the target database before or during release.
 
 ### Important: remove legacy Vercel cron configuration
 
 If you previously deployed with a `crons` config, Vercel may still show cron notices until the project is redeployed with the current repo state and any old cron jobs are removed in Vercel dashboard.
 
-- Vercel Project → Settings → Cron Jobs → remove old entries
+- Vercel Project -> Settings -> Cron Jobs -> remove old entries
 - Redeploy latest commit (this repo now ships `vercel.json` with no `crons`)
 
 ## 8) Scheduler
@@ -79,4 +90,4 @@ For now, scheduling should run from n8n (not Vercel cron/GitHub Actions cron):
 
 - n8n schedule every 5 minutes
 - n8n HTTP request -> `POST https://<your-domain>/api/jobs/call-dispatch`
-- Header: `Authorization: Bearer <CRON_JOB_SECRET>`
+- Optional header: `Authorization: Bearer <N8N_DISPATCH_SECRET>` if secret is configured

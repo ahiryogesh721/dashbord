@@ -174,7 +174,7 @@ export default function DashbordPage() {
 
   const visibleAvgScore = useMemo(() => {
     const scores = filteredLeads.map((lead) => lead.score).filter((score): score is number => typeof score === "number");
-    if (scores.length === 0) return "—";
+    if (scores.length === 0) return "-";
 
     const avg = scores.reduce((sum, score) => sum + score, 0) / scores.length;
     return avg.toFixed(1);
@@ -534,13 +534,13 @@ export default function DashbordPage() {
                   {filteredLeads.map((lead) => (
                     <tr key={lead.id}>
                       <td>{lead.customerName ?? "Unknown"}</td>
-                      <td>{lead.phone ?? "—"}</td>
+                      <td>{lead.phone ?? "-"}</td>
                       <td>{lead.source}</td>
                       <td>
                         <span className={styles.badge}>{formatLabel(lead.stage)}</span>
                       </td>
-                      <td>{lead.interestLabel ? formatLabel(lead.interestLabel) : "—"}</td>
-                      <td>{lead.score ?? "—"}</td>
+                      <td>{lead.interestLabel ? formatLabel(lead.interestLabel) : "-"}</td>
+                      <td>{lead.score ?? "-"}</td>
                       <td>{lead.salesRep?.name ?? "Unassigned"}</td>
                       <td>{new Date(lead.createdAt).toLocaleString()}</td>
                     </tr>
