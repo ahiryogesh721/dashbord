@@ -70,12 +70,12 @@ const INITIAL_FORM: ManualLeadFormState = {
 };
 
 const COUNTRY_OPTIONS = [
-  { flag: "🇮🇳", name: "India", dialCode: "+91" },
-  { flag: "🇺🇸", name: "United States", dialCode: "+1" },
-  { flag: "🇬🇧", name: "United Kingdom", dialCode: "+44" },
-  { flag: "🇦🇪", name: "UAE", dialCode: "+971" },
-  { flag: "🇸🇬", name: "Singapore", dialCode: "+65" },
-  { flag: "🇦🇺", name: "Australia", dialCode: "+61" },
+  { name: "India", dialCode: "+91" },
+  { name: "United States", dialCode: "+1" },
+  { name: "United Kingdom", dialCode: "+44" },
+  { name: "UAE", dialCode: "+971" },
+  { name: "Singapore", dialCode: "+65" },
+  { name: "Australia", dialCode: "+61" },
 ] as const;
 
 export default function DashbordPage() {
@@ -386,7 +386,7 @@ export default function DashbordPage() {
                   >
                     {COUNTRY_OPTIONS.map((country) => (
                       <option key={country.dialCode} value={country.dialCode}>
-                        {country.flag} {country.name} ({country.dialCode})
+                        {country.name} ({country.dialCode})
                       </option>
                     ))}
                   </select>

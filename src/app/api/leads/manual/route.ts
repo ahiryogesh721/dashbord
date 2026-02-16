@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { PrismaClient } from "@prisma/client";
 import { ZodError, z } from "zod";
 
 import { INTEREST_LABELS } from "@/lib/domain";
@@ -29,8 +30,97 @@ type InsertedLeadRow = {
   preference: string | null;
 };
 
+type SupabaseLikeError = {
+  code?: string | null;
+  message?: string | null;
+};
+
+type CreateManualLeadInput = z.infer<typeof createLeadSchema>;
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __manualLeadPrismaClient: PrismaClient | undefined;
+}
+
+function getPrismaClient(): PrismaClient {
+  if (!globalThis.__manualLeadPrismaClient) {
+    globalThis.__manualLeadPrismaClient = new PrismaClient();
+  }
+
+  return globalThis.__manualLeadPrismaClient;
+}
+
 function normalizePhone(phone: string): string {
   return phone.replace(/\s+/g, "").replace(/-/g, "");
+}
+
+function toLowerSafe(value: unknown): string {
+  return typeof value === "string" ? value.toLowerCase() : "";
+}
+
+function shouldFallbackToPrisma(error: unknown): boolean {
+  const candidate = error as SupabaseLikeError | null | undefined;
+  const code = toLowerSafe(candidate?.code);
+  const message = toLowerSafe(candidate?.message);
+
+  return (
+    code === "42501" ||
+    message.includes("permission denied") ||
+    message.includes("insufficient_privilege") ||
+    message.includes("row-level security") ||
+    message.includes("rls") ||
+    message.includes("missing supabase configuration")
+  );
+}
+
+async function createManualLeadWithPrisma(
+  input: CreateManualLeadInput,
+  cleanedPhone: string,
+  nowIso: string,
+): Promise<InsertedLeadRow> {
+  const prisma = getPrismaClient();
+
+  const created = await prisma.lead.create({
+    data: {
+      id: randomUUID(),
+      createdAt: new Date(nowIso),
+      updatedAt: new Date(nowIso),
+      customerName: input.customer_name,
+      phone: cleanedPhone,
+      source: input.source,
+      goal: input.goal ?? null,
+      preference: input.preference ?? null,
+      interestLabel: input.interest_label ?? null,
+      stage: "new",
+      rawPayload: {
+        created_via: "manual_dashboard_form",
+        submitted_at: nowIso,
+      },
+    },
+    select: {
+      id: true,
+      createdAt: true,
+      customerName: true,
+      phone: true,
+      source: true,
+      stage: true,
+      interestLabel: true,
+      goal: true,
+      preference: true,
+    },
+  });
+
+  return {
+    id: created.id,
+    created_at: created.createdAt.toISOString(),
+    customer_name: created.customerName,
+    phone: created.phone,
+    source: created.source,
+    stage: created.stage,
+    interest_label: created.interestLabel,
+    goal: created.goal,
+    preference: created.preference,
+  };
 }
 
 function errorResponse(error: unknown): NextResponse {
@@ -45,7 +135,8 @@ function errorResponse(error: unknown): NextResponse {
     return NextResponse.json(
       {
         ok: false,
-        error: "Server write access is not configured. Set a Supabase service role key for backend APIs.",
+        error:
+          "Write access is blocked by current Supabase auth/policies. Configure RLS for publishable key usage or provide server write credentials.",
       },
       { status: 503 },
     );
@@ -58,11 +149,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body = await request.json();
     const input = createLeadSchema.parse(body);
-
-    const supabase = getSupabaseServerClient();
-
     const cleanedPhone = normalizePhone(input.phone);
     const nowIso = new Date().toISOString();
+
     const payload = {
       id: randomUUID(),
       created_at: nowIso,
@@ -80,15 +169,24 @@ export async function POST(request: Request): Promise<NextResponse> {
       },
     };
 
-    const response = await supabase
-      .from("leads")
-      .insert(payload)
-      .select("id,created_at,customer_name,phone,source,stage,interest_label,goal,preference")
-      .single();
+    try {
+      const supabase = getSupabaseServerClient();
+      const response = await supabase
+        .from("leads")
+        .insert(payload)
+        .select("id,created_at,customer_name,phone,source,stage,interest_label,goal,preference")
+        .single();
 
-    throwIfSupabaseError("Unable to create manual lead", response.error);
+      throwIfSupabaseError("Unable to create manual lead", response.error);
+      return NextResponse.json({ ok: true, data: response.data as InsertedLeadRow }, { status: 201 });
+    } catch (supabaseError) {
+      if (!shouldFallbackToPrisma(supabaseError)) {
+        throw supabaseError;
+      }
 
-    return NextResponse.json({ ok: true, data: response.data as InsertedLeadRow }, { status: 201 });
+      const prismaRow = await createManualLeadWithPrisma(input, cleanedPhone, nowIso);
+      return NextResponse.json({ ok: true, data: prismaRow }, { status: 201 });
+    }
   } catch (error) {
     if (error instanceof SyntaxError) {
       return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
