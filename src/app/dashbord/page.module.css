@@ -1,0 +1,402 @@
+.page {
+  max-width: 1320px;
+  margin: 24px auto 48px;
+  padding: 0 18px;
+  color: var(--text-color);
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 22px;
+  padding: 24px;
+  background: linear-gradient(130deg, color-mix(in srgb, var(--accent-color) 18%, transparent), var(--card-bg));
+  box-shadow: 0 18px 45px rgba(13, 23, 44, 0.12);
+}
+
+.heroBackdrop {
+  position: absolute;
+  inset: -80px -120px auto auto;
+  width: 320px;
+  height: 320px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(64, 123, 255, 0.28), rgba(64, 123, 255, 0));
+  pointer-events: none;
+}
+
+.heroTopRow {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-text);
+  font-weight: 700;
+}
+
+.hero h1 {
+  margin: 8px 0 0;
+  font-size: clamp(1.4rem, 1.2rem + 1.2vw, 2.2rem);
+}
+
+.heroSubtext {
+  margin: 10px 0 0;
+  color: var(--muted-text);
+  max-width: 860px;
+  line-height: 1.45;
+}
+
+.heroActions {
+  display: flex;
+  gap: 10px;
+}
+
+.primaryButton,
+.ghostButton,
+.sortButtons button,
+.pagination button {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: 0.2s ease;
+}
+
+.primaryButton {
+  border-color: var(--accent-color);
+  background: var(--accent-color);
+  color: #fff;
+}
+
+.primaryButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.ghostButton,
+.sortButtons button,
+.pagination button {
+  background: var(--card-soft-bg);
+  color: var(--text-color);
+}
+
+.primaryButton:hover,
+.ghostButton:hover,
+.sortButtons button:hover,
+.pagination button:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-color);
+}
+
+.kpiGrid {
+  position: relative;
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.kpiCard {
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--card-bg) 88%, transparent);
+  padding: 12px;
+  backdrop-filter: blur(2px);
+}
+
+.kpiCard p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted-text);
+}
+
+.kpiCard strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1.4rem;
+}
+
+.kpiCard small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted-text);
+  font-size: 0.76rem;
+}
+
+.noticeCard {
+  margin-top: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 35%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 14%, var(--card-bg));
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.controlRow,
+.analyticsGrid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 12px;
+}
+
+.card,
+.tableSection {
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: var(--card-bg);
+  padding: 14px;
+  box-shadow: 0 7px 24px rgba(14, 20, 40, 0.06);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cardHeader h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.manualLeadForm {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.manualLeadForm label,
+.filterGrid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.manualLeadForm input,
+.manualLeadForm select,
+.filterGrid input,
+.filterGrid select {
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--card-soft-bg);
+  color: var(--text-color);
+  padding: 9px;
+}
+
+.phoneInputRow {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.9fr) 1.1fr;
+  gap: 8px;
+}
+
+.inputError {
+  border-color: var(--danger-color) !important;
+}
+
+.fieldError {
+  color: var(--danger-color);
+  font-size: 0.8rem;
+}
+
+.filterGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.searchField {
+  grid-column: 1 / -1;
+}
+
+.status,
+.error,
+.success {
+  margin-top: 12px;
+}
+
+.error {
+  color: var(--danger-color);
+  font-weight: 700;
+}
+
+.success {
+  color: #1e8e5a;
+  font-weight: 700;
+}
+
+.progressList,
+.compactList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.progressList li {
+  display: grid;
+  grid-template-columns: 150px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+}
+
+.stageButton {
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  text-align: left;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.progressTrack {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--card-soft-bg);
+  overflow: hidden;
+}
+
+.progressTrack span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #4c88ff, #2ed3b7);
+}
+
+.compactList li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed var(--border-color);
+  padding: 10px 0;
+}
+
+.compactList li:last-child {
+  border-bottom: none;
+}
+
+.visitStats {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.visitStats p {
+  margin: 8px 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+.tableSection {
+  margin-top: 14px;
+}
+
+.sortButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tableWrap {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: auto;
+}
+
+.tableWrap table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+}
+
+.tableWrap th,
+.tableWrap td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.9rem;
+}
+
+.tableWrap th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card-soft-bg);
+}
+
+.badge {
+  display: inline-block;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.78rem;
+  background: var(--card-soft-bg);
+}
+
+.emptyRow {
+  text-align: center !important;
+  color: var(--muted-text);
+}
+
+.pagination {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+@media (max-width: 1180px) {
+  .kpiGrid {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 920px) {
+  .heroTopRow,
+  .controlRow,
+  .analyticsGrid {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .heroActions {
+    width: 100%;
+  }
+
+  .heroActions button {
+    flex: 1;
+  }
+
+  .kpiGrid {
+    grid-template-columns: repeat(2, minmax(150px, 1fr));
+  }
+
+  .progressList li {
+    grid-template-columns: 120px 1fr auto;
+  }
+
+  .phoneInputRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .kpiGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .pagination {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
