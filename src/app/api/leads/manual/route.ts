@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { ZodError, z } from "zod";
@@ -39,45 +38,80 @@ function isUniqueViolation(error: PostgrestError | null): boolean {
   return error?.code === "23505";
 }
 
+function isPrismaUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "P2002"
+  );
+}
+
 async function createManualLeadWithPrisma(
   input: CreateManualLeadInput,
   cleanedPhone: string,
   nowIso: string,
 ): Promise<InsertedLeadRow> {
   const prisma = getPrismaServerClient();
+  const leadMutation = {
+    updatedAt: new Date(nowIso),
+    customerName: input.customer_name,
+    phone: cleanedPhone,
+    source: input.source,
+    goal: input.goal ?? null,
+    preference: input.preference ?? null,
+    interestLabel: input.interest_label ?? null,
+    rawPayload: {
+      created_via: "manual_dashboard_form",
+      submitted_at: nowIso,
+    },
+  };
 
-  const created = await prisma.lead.upsert({
+  let targetLeadId = (
+    await prisma.lead.findFirst({
+      where: {
+        phone: cleanedPhone,
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { id: true },
+    })
+  )?.id;
+
+  if (!targetLeadId) {
+    try {
+      const createdLead = await prisma.lead.create({
+        data: {
+          id: deterministicLeadIdFromPhone(cleanedPhone),
+          createdAt: new Date(nowIso),
+          stage: "new",
+          ...leadMutation,
+        },
+        select: { id: true },
+      });
+      targetLeadId = createdLead.id;
+    } catch (error) {
+      if (!isPrismaUniqueConstraintError(error)) {
+        throw error;
+      }
+
+      // Another request created the same lead concurrently.
+      const recovered = await prisma.lead.findFirst({
+        where: { phone: cleanedPhone },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: { id: true },
+      });
+      if (!recovered) {
+        throw error;
+      }
+      targetLeadId = recovered.id;
+    }
+  }
+
+  const created = await prisma.lead.update({
     where: {
-      phone: cleanedPhone,
+      id: targetLeadId,
     },
-    update: {
-      updatedAt: new Date(nowIso),
-      customerName: input.customer_name,
-      source: input.source,
-      goal: input.goal ?? null,
-      preference: input.preference ?? null,
-      interestLabel: input.interest_label ?? null,
-      rawPayload: {
-        created_via: "manual_dashboard_form",
-        submitted_at: nowIso,
-      },
-    },
-    create: {
-      id: randomUUID(),
-      createdAt: new Date(nowIso),
-      updatedAt: new Date(nowIso),
-      customerName: input.customer_name,
-      phone: cleanedPhone,
-      source: input.source,
-      goal: input.goal ?? null,
-      preference: input.preference ?? null,
-      interestLabel: input.interest_label ?? null,
-      stage: "new",
-      rawPayload: {
-        created_via: "manual_dashboard_form",
-        submitted_at: nowIso,
-      },
-    },
+    data: leadMutation,
     select: {
       id: true,
       createdAt: true,
