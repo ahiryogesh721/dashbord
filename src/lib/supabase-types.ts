@@ -26,7 +26,6 @@ export type Database = {
           confidence: number | null;
           ai_reason: string | null;
           stage: LeadStage;
-          assigned_to: string | null;
           source: string;
           raw_payload: Json | null;
         };
@@ -50,7 +49,6 @@ export type Database = {
           confidence?: number | null;
           ai_reason?: string | null;
           stage?: LeadStage;
-          assigned_to?: string | null;
           source?: string;
           raw_payload?: Json | null;
         };
@@ -74,42 +72,8 @@ export type Database = {
           confidence?: number | null;
           ai_reason?: string | null;
           stage?: LeadStage;
-          assigned_to?: string | null;
           source?: string;
           raw_payload?: Json | null;
-        };
-        Relationships: [];
-      };
-      sales_reps: {
-        Row: {
-          id: string;
-          created_at: string;
-          updated_at: string;
-          name: string;
-          email: string | null;
-          phone: string | null;
-          is_active: boolean;
-          max_open_leads: number;
-        };
-        Insert: {
-          id?: string;
-          created_at?: string;
-          updated_at?: string;
-          name: string;
-          email?: string | null;
-          phone?: string | null;
-          is_active?: boolean;
-          max_open_leads?: number;
-        };
-        Update: {
-          id?: string;
-          created_at?: string;
-          updated_at?: string;
-          name?: string;
-          email?: string | null;
-          phone?: string | null;
-          is_active?: boolean;
-          max_open_leads?: number;
         };
         Relationships: [];
       };
@@ -119,7 +83,6 @@ export type Database = {
           created_at: string;
           updated_at: string;
           lead_id: string;
-          rep_id: string | null;
           scheduled_for: string | null;
           completed_at: string | null;
           status: SiteVisitStatus;
@@ -130,7 +93,6 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           lead_id: string;
-          rep_id?: string | null;
           scheduled_for?: string | null;
           completed_at?: string | null;
           status?: SiteVisitStatus;
@@ -141,7 +103,6 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           lead_id?: string;
-          rep_id?: string | null;
           scheduled_for?: string | null;
           completed_at?: string | null;
           status?: SiteVisitStatus;
@@ -155,7 +116,6 @@ export type Database = {
           created_at: string;
           updated_at: string;
           lead_id: string;
-          rep_id: string | null;
           due_at: string;
           channel: string;
           message: string | null;
@@ -167,7 +127,6 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           lead_id: string;
-          rep_id?: string | null;
           due_at: string;
           channel?: string;
           message?: string | null;
@@ -179,7 +138,6 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           lead_id?: string;
-          rep_id?: string | null;
           due_at?: string;
           channel?: string;
           message?: string | null;

@@ -1,8 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 
-import { PrismaClient } from "@prisma/client";
-
 function loadDotEnvIfPresent(): void {
   // `npm run prisma:seed` (and `tsx prisma/seed.ts`) do not automatically load `.env`.
   // Prisma CLI and Next do; keep seed behavior consistent without adding a dependency.
@@ -35,52 +33,9 @@ function loadDotEnvIfPresent(): void {
   }
 }
 
-const initialSalesReps: Array<{
-  name: string;
-  email: string;
-  phone: string;
-  maxOpenLeads: number;
-}> = [
-  {
-    name: "Sarah Miller",
-    email: "sarah.miller@example.com",
-    phone: "+15550000001",
-    maxOpenLeads: 80,
-  },
-  {
-    name: "David Khan",
-    email: "david.khan@example.com",
-    phone: "+15550000002",
-    maxOpenLeads: 80,
-  },
-];
-
 async function main(): Promise<void> {
   loadDotEnvIfPresent();
-  const prisma = new PrismaClient();
-
-  try {
-    for (const rep of initialSalesReps) {
-      await prisma.salesRep.upsert({
-        where: { email: rep.email },
-        update: {
-          name: rep.name,
-          phone: rep.phone,
-          maxOpenLeads: rep.maxOpenLeads,
-          isActive: true,
-        },
-        create: {
-          name: rep.name,
-          email: rep.email,
-          phone: rep.phone,
-          maxOpenLeads: rep.maxOpenLeads,
-          isActive: true,
-        },
-      });
-    }
-  } finally {
-    await prisma.$disconnect();
-  }
+  console.log("No seed data to apply.");
 }
 
 main()

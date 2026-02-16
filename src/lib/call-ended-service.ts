@@ -6,7 +6,6 @@ import { normalizeCallEndedPayload } from "@/lib/call-ended-payload";
 import { normalizeCustomerNameToEnglish, normalizeGoalToEnglish, normalizeVisitSchedule } from "@/lib/call-ended-normalization";
 import { scoreLead } from "@/lib/lead-scoring";
 import { containsHindi, translateHindiToEnglish } from "@/lib/myHelpers";
-import { assignSalesRep } from "@/lib/sales-assignment";
 import { getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-server";
 import { Json } from "@/lib/supabase-types";
 
@@ -56,8 +55,6 @@ type ProcessedCallEndedEvent = {
   score: number;
   interestLabel: InterestLabel;
   stage: LeadStage;
-  assignedTo: string | null;
-  assignmentStrategy: "least_loaded" | "overflow_least_loaded" | "no_active_rep";
   followUpId: string;
   followUpDueAt: string;
 };
@@ -67,7 +64,6 @@ type InsertedLeadRow = {
   score: number | null;
   interest_label: InterestLabel | null;
   stage: LeadStage;
-  assigned_to: string | null;
   customer_name: string | null;
 };
 
@@ -124,7 +120,6 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
     interestLabel: scoreResult.interestLabel,
     stage,
   });
-  const assignment = await assignSalesRep();
   const rawPayload = JSON.parse(JSON.stringify(payload)) as Json;
   const nowIso = new Date().toISOString();
   const leadId = randomUUID();
@@ -151,11 +146,10 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
       confidence: scoreResult.confidence,
       ai_reason: scoreResult.reason,
       stage,
-      assigned_to: assignment.salesRepId,
       source: "voice_ai",
       raw_payload: rawPayload,
     })
-    .select("id,score,interest_label,stage,assigned_to,customer_name")
+    .select("id,score,interest_label,stage,customer_name")
     .single();
   throwIfSupabaseError("Failed to create lead", leadError);
 
@@ -173,7 +167,6 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
       created_at: followUpNowIso,
       updated_at: followUpNowIso,
       lead_id: lead.id,
-      rep_id: assignment.salesRepId,
       due_at: dueAt.toISOString(),
       channel: "whatsapp",
       message: buildFollowUpMessage(lead.customer_name),
@@ -198,8 +191,6 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
     score: lead.score ?? 0,
     interestLabel: lead.interest_label ?? "cold",
     stage: lead.stage,
-    assignedTo: lead.assigned_to,
-    assignmentStrategy: assignment.strategy,
     followUpId: followUp.id,
     followUpDueAt: new Date(followUp.due_at).toISOString(),
   };

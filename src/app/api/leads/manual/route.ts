@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
 import { ZodError, z } from "zod";
 
 import { INTEREST_LABELS } from "@/lib/domain";
+import { getPrismaServerClient, shouldFallbackToPrisma } from "@/lib/prisma-server";
 import { getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-server";
 
 const createLeadSchema = z.object({
@@ -30,47 +30,10 @@ type InsertedLeadRow = {
   preference: string | null;
 };
 
-type SupabaseLikeError = {
-  code?: string | null;
-  message?: string | null;
-};
-
 type CreateManualLeadInput = z.infer<typeof createLeadSchema>;
-
-declare global {
-  // eslint-disable-next-line no-var
-  var __manualLeadPrismaClient: PrismaClient | undefined;
-}
-
-function getPrismaClient(): PrismaClient {
-  if (!globalThis.__manualLeadPrismaClient) {
-    globalThis.__manualLeadPrismaClient = new PrismaClient();
-  }
-
-  return globalThis.__manualLeadPrismaClient;
-}
 
 function normalizePhone(phone: string): string {
   return phone.replace(/\s+/g, "").replace(/-/g, "");
-}
-
-function toLowerSafe(value: unknown): string {
-  return typeof value === "string" ? value.toLowerCase() : "";
-}
-
-function shouldFallbackToPrisma(error: unknown): boolean {
-  const candidate = error as SupabaseLikeError | null | undefined;
-  const code = toLowerSafe(candidate?.code);
-  const message = toLowerSafe(candidate?.message);
-
-  return (
-    code === "42501" ||
-    message.includes("permission denied") ||
-    message.includes("insufficient_privilege") ||
-    message.includes("row-level security") ||
-    message.includes("rls") ||
-    message.includes("missing supabase configuration")
-  );
 }
 
 async function createManualLeadWithPrisma(
@@ -78,7 +41,7 @@ async function createManualLeadWithPrisma(
   cleanedPhone: string,
   nowIso: string,
 ): Promise<InsertedLeadRow> {
-  const prisma = getPrismaClient();
+  const prisma = getPrismaServerClient();
 
   const created = await prisma.lead.create({
     data: {

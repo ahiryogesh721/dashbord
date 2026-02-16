@@ -15,18 +15,12 @@ const siteVisitInputSchema = z.object({
   scheduled_for: z.string().datetime({ offset: true }).optional().nullable(),
   completed_at: z.string().datetime({ offset: true }).optional().nullable(),
   notes: z.string().max(2_000).optional().nullable(),
-  rep_id: z.string().uuid().optional().nullable(),
 });
 
 type LeadLookupRow = {
   id: string;
   stage: LeadStage;
-  assigned_to: string | null;
   customer_name: string | null;
-};
-
-type SalesRepLookupRow = {
-  id: string;
 };
 
 type SiteVisitInsertRow = {
@@ -84,7 +78,7 @@ export async function POST(
 
     const leadResponse = await supabase
       .from("leads")
-      .select("id,stage,assigned_to,customer_name")
+      .select("id,stage,customer_name")
       .eq("id", parsedParams.leadId)
       .maybeSingle();
     throwIfSupabaseError("Unable to load lead", leadResponse.error);
@@ -92,28 +86,6 @@ export async function POST(
     const lead = leadResponse.data as LeadLookupRow | null;
     if (!lead) {
       return NextResponse.json({ ok: false, error: "Lead not found" }, { status: 404 });
-    }
-
-    const repId = input.rep_id ?? lead.assigned_to ?? null;
-    if (input.rep_id) {
-      const repResponse = await supabase
-        .from("sales_reps")
-        .select("id")
-        .eq("id", input.rep_id)
-        .eq("is_active", true)
-        .maybeSingle();
-      throwIfSupabaseError("Unable to validate sales rep", repResponse.error);
-
-      const rep = repResponse.data as SalesRepLookupRow | null;
-      if (!rep) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "rep_id must reference an active sales rep",
-          },
-          { status: 400 },
-        );
-      }
     }
 
     const nextStage = stageFromSiteVisit(input.status, lead.stage);
@@ -128,7 +100,6 @@ export async function POST(
         created_at: nowIso,
         updated_at: nowIso,
         lead_id: lead.id,
-        rep_id: repId,
         status: input.status,
         scheduled_for: toNullableIsoDate(input.scheduled_for),
         completed_at: completedAtIso,
@@ -163,7 +134,6 @@ export async function POST(
         created_at: followUpNowIso,
         updated_at: followUpNowIso,
         lead_id: lead.id,
-        rep_id: repId,
         due_at: dueAt.toISOString(),
         channel: "call",
         message: `Post-visit follow-up for ${lead.customer_name || "lead"}`,

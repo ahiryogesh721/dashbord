@@ -28,11 +28,6 @@ type Lead = {
   interestLabel: string | null;
   stage: string;
   source: string;
-  assignedTo: string | null;
-  salesRep: {
-    name: string;
-    email: string | null;
-  } | null;
 };
 
 type LeadListData = {
@@ -160,8 +155,7 @@ export default function DashbordPage() {
 
     const searched = query
       ? leads.filter((lead) => {
-          const repName = lead.salesRep?.name ?? "";
-          return [lead.customerName ?? "", lead.phone ?? "", lead.source, repName].join(" ").toLowerCase().includes(query);
+          return [lead.customerName ?? "", lead.phone ?? "", lead.source].join(" ").toLowerCase().includes(query);
         })
       : leads;
 
@@ -510,7 +504,7 @@ export default function DashbordPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search name, phone, source, rep"
+                placeholder="Search name, phone, source"
               />
             </label>
           </div>
@@ -604,14 +598,13 @@ export default function DashbordPage() {
                     <th>Stage</th>
                     <th>Interest</th>
                     <th>Score</th>
-                    <th>Rep</th>
                     <th>Created</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredLeads.length === 0 && (
                     <tr>
-                      <td colSpan={8} className={styles.emptyRow}>
+                      <td colSpan={7} className={styles.emptyRow}>
                         No leads found for current filters.
                       </td>
                     </tr>
@@ -626,7 +619,6 @@ export default function DashbordPage() {
                       </td>
                       <td>{lead.interestLabel ? formatLabel(lead.interestLabel) : "-"}</td>
                       <td>{lead.score ?? "-"}</td>
-                      <td>{lead.salesRep?.name ?? "Unassigned"}</td>
                       <td>{new Date(lead.createdAt).toLocaleString()}</td>
                     </tr>
                   ))}

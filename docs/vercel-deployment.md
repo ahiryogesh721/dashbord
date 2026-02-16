@@ -21,6 +21,7 @@ Set these in Vercel Project Settings -> Environment Variables:
 
 Optional hardening variables:
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_SECRET_KEY`
 - `N8N_WEBHOOK_SECRET`
 - `N8N_DISPATCH_SECRET` (legacy fallback: `CRON_JOB_SECRET`)
 - Optional for Hindi translation fallback: `OPENAI_API_KEY`
@@ -53,7 +54,7 @@ Run migrations from this repo so schema stays in sync:
 npx prisma migrate deploy
 ```
 
-Then seed initial sales reps:
+Optional seed step (currently no-op):
 
 ```powershell
 npm run prisma:seed

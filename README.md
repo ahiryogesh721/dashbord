@@ -1,12 +1,11 @@
 # Real Estate Voice AI Backend
 
-Next.js + Supabase backend for lead lifecycle, scoring, assignment, visits, follow-ups, and dashboard metrics.
+Next.js + Supabase backend for lead lifecycle, scoring, visits, follow-ups, and dashboard metrics.
 
 ## Core Features
 
 - Call-ended webhook ingestion with schema validation
 - Lead scoring (`0-100`) and interest tagging (`hot` / `warm` / `cold`)
-- Sales rep assignment (least-loaded strategy)
 - Site visit tracking and follow-up scheduling
 - Manual lead creation endpoint
 - n8n-triggered call dispatch endpoint for Omni
@@ -48,7 +47,7 @@ npm run prisma:generate
 npx prisma migrate deploy
 ```
 
-5. Seed initial sales reps.
+5. Optional seed step (currently no-op).
 
 ```bash
 npm run prisma:seed
@@ -72,6 +71,7 @@ npm run dev
 
 Optional hardening variables:
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_SECRET_KEY`
 - `N8N_WEBHOOK_SECRET`
 - `N8N_DISPATCH_SECRET` (or legacy `CRON_JOB_SECRET`)
 

@@ -2,10 +2,24 @@ import { PostgrestError } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 import { INTEREST_LABELS, LEAD_STAGES } from "@/lib/domain";
+import { getPrismaServerClient, shouldFallbackToPrisma } from "@/lib/prisma-server";
 import { fetchAllSupabaseRows, getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-server";
 
 type ScoreRow = {
   score: number | null;
+};
+
+type FounderMetricsData = {
+  totalLeads: number;
+  avgScore: number;
+  conversionRate: number;
+  stageBreakdown: Record<string, number>;
+  interestBreakdown: Record<string, number>;
+  visits: {
+    scheduled: number;
+    completed: number;
+  };
+  followUpsDueToday: number;
 };
 
 function emptyStageBreakdown(): Record<string, number> {
@@ -70,15 +84,66 @@ async function countRowsWithFallback(
   return total;
 }
 
+async function computeFounderMetricsWithPrisma(startOfToday: Date, endOfToday: Date): Promise<FounderMetricsData> {
+  const prisma = getPrismaServerClient();
+
+  const [totalLeads, closedLeads, scheduledVisits, completedVisits, followUpsDueToday, avgScoreResult] = await Promise.all([
+    prisma.lead.count(),
+    prisma.lead.count({ where: { stage: "closed" } }),
+    prisma.siteVisit.count({ where: { status: "scheduled" } }),
+    prisma.siteVisit.count({ where: { status: "completed" } }),
+    prisma.followUp.count({
+      where: {
+        status: "pending",
+        dueAt: {
+          gte: startOfToday,
+          lt: endOfToday,
+        },
+      },
+    }),
+    prisma.lead.aggregate({
+      _avg: {
+        score: true,
+      },
+    }),
+  ]);
+
+  const stageCounts = await Promise.all(LEAD_STAGES.map((stage) => prisma.lead.count({ where: { stage } })));
+  const stageBreakdown = Object.fromEntries(LEAD_STAGES.map((stage, index) => [stage, stageCounts[index] ?? 0]));
+
+  const interestCounts = await Promise.all(
+    INTEREST_LABELS.map((interestLabel) => prisma.lead.count({ where: { interestLabel } })),
+  );
+  const interestBreakdown = Object.fromEntries(INTEREST_LABELS.map((label, index) => [label, interestCounts[index] ?? 0]));
+
+  const avgScore = avgScoreResult._avg.score !== null ? Number(avgScoreResult._avg.score.toFixed(2)) : 0;
+  const conversionRate = totalLeads > 0 ? Number(((closedLeads / totalLeads) * 100).toFixed(2)) : 0;
+
+  return {
+    totalLeads,
+    avgScore,
+    conversionRate,
+    stageBreakdown,
+    interestBreakdown,
+    visits: {
+      scheduled: scheduledVisits,
+      completed: completedVisits,
+    },
+    followUpsDueToday,
+  };
+}
+
 export async function GET(): Promise<NextResponse> {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const endOfToday = new Date(startOfToday);
+  endOfToday.setDate(endOfToday.getDate() + 1);
+
   try {
     const supabase = getSupabaseServerClient();
-
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-
-    const endOfToday = new Date(startOfToday);
-    endOfToday.setDate(endOfToday.getDate() + 1);
+    const accessCheck = await supabase.from("leads").select("id").limit(1);
+    throwIfSupabaseError("Unable to access dashboard tables", accessCheck.error);
 
     const [totalLeads, closedLeads, scheduledVisits, completedVisits, followUpsDueToday] = await Promise.all([
       countRowsWithFallback(
@@ -169,6 +234,15 @@ export async function GET(): Promise<NextResponse> {
       },
     });
   } catch (error) {
+    if (shouldFallbackToPrisma(error)) {
+      try {
+        const data = await computeFounderMetricsWithPrisma(startOfToday, endOfToday);
+        return NextResponse.json({ ok: true, data });
+      } catch (fallbackError) {
+        console.error("founder-metrics Prisma fallback failed", fallbackError);
+      }
+    }
+
     console.error("founder-metrics failed; returning degraded response", error);
     return fallbackMetrics("metrics_unavailable");
   }

@@ -3,7 +3,7 @@ export default function HomePage() {
     <main className="container">
       <h1>Real Estate Voice AI</h1>
       <p>
-        API and dashboard for managing lead lifecycle, sales assignments, site visits, and conversion performance in one
+        API and dashboard for managing lead lifecycle, site visits, and conversion performance in one
         place.
       </p>
       <ul>

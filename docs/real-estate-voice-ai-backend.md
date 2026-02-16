@@ -11,14 +11,12 @@
    - payload validation
    - scoring (`0-100`)
    - lead persistence
-   - sales rep assignment
    - lifecycle stage assignment
    - follow-up scheduling
 
 ## Core Data Model
 
-- `leads`: source of truth for lifecycle, score, and assignment
-- `sales_reps`: assignment pool and capacity limits
+- `leads`: source of truth for lifecycle and score
 - `site_visits`: scheduled/completed visit trail
 - `follow_ups`: pending and completed follow-up queue
 
@@ -32,10 +30,6 @@
   - `hot` -> `+2h`
   - `warm` -> `+24h`
   - `cold` -> `+72h`
-- Assignment:
-  - least-loaded active rep by open leads
-  - overflow to least-loaded if all reps exceed capacity
-
 ## Next Endpoints
 
 - `POST /api/webhooks/call-ended`
