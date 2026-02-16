@@ -63,3 +63,20 @@ Update n8n webhook target to:
 
 - Code push -> Vercel auto-deploys
 - For schema changes, run new SQL migrations in Supabase and redeploy.
+
+
+
+### Important: remove legacy Vercel cron configuration
+
+If you previously deployed with a `crons` config, Vercel may still show cron notices until the project is redeployed with the current repo state and any old cron jobs are removed in Vercel dashboard.
+
+- Vercel Project → Settings → Cron Jobs → remove old entries
+- Redeploy latest commit (this repo now ships `vercel.json` with no `crons`)
+
+## 8) Scheduler
+
+For now, scheduling should run from n8n (not Vercel cron/GitHub Actions cron):
+
+- n8n schedule every 5 minutes
+- n8n HTTP request -> `POST https://<your-domain>/api/jobs/call-dispatch`
+- Header: `Authorization: Bearer <CRON_JOB_SECRET>`
