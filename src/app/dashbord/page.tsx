@@ -47,6 +47,7 @@ type SortField = "createdAt" | "score" | "customerName";
 
 type ManualLeadFormState = {
   customer_name: string;
+  countryCode: string;
   phone: string;
   source: string;
   goal: string;
@@ -59,12 +60,22 @@ type ManualLeadFieldErrors = Partial<Record<keyof ManualLeadFormState, string>>;
 const PAGE_SIZE = 25;
 const INITIAL_FORM: ManualLeadFormState = {
   customer_name: "",
+  countryCode: "+91",
   phone: "",
   source: "manual",
   goal: "",
   preference: "",
   interest_label: "",
 };
+
+const COUNTRY_OPTIONS = [
+  { flag: "🇮🇳", name: "India", dialCode: "+91" },
+  { flag: "🇺🇸", name: "United States", dialCode: "+1" },
+  { flag: "🇬🇧", name: "United Kingdom", dialCode: "+44" },
+  { flag: "🇦🇪", name: "UAE", dialCode: "+971" },
+  { flag: "🇸🇬", name: "Singapore", dialCode: "+65" },
+  { flag: "🇦🇺", name: "Australia", dialCode: "+61" },
+] as const;
 
 export default function DashbordPage() {
   const [metrics, setMetrics] = useState<FounderMetrics | null>(null);
@@ -206,11 +217,16 @@ export default function DashbordPage() {
       fieldErrors.customer_name = "Name should be at least 2 characters.";
     }
 
-    const cleanedPhone = form.phone.replace(/\s+/g, "");
+    const cleanedPhone = form.phone.replace(/\D/g, "");
+    const dialCodeDigits = form.countryCode.replace(/\D/g, "");
+    const fullNumberDigits = `${dialCodeDigits}${cleanedPhone}`;
+
     if (!cleanedPhone) {
       fieldErrors.phone = "Phone number is required.";
-    } else if (!/^\+?[0-9]{7,15}$/.test(cleanedPhone)) {
-      fieldErrors.phone = "Enter a valid phone number (7-15 digits, optional +).";
+    } else if (!/^\d{6,14}$/.test(cleanedPhone)) {
+      fieldErrors.phone = "Enter a valid phone number.";
+    } else if (!/^\d{7,15}$/.test(fullNumberDigits)) {
+      fieldErrors.phone = "Selected country code + phone must be between 7 and 15 digits.";
     }
 
     if (!form.source.trim()) {
@@ -255,7 +271,7 @@ export default function DashbordPage() {
         },
         body: JSON.stringify({
           customer_name: manualLeadForm.customer_name.trim(),
-          phone: manualLeadForm.phone.replace(/\s+/g, ""),
+          phone: `${manualLeadForm.countryCode}${manualLeadForm.phone.replace(/\D/g, "")}`,
           source: manualLeadForm.source.trim(),
           goal: manualLeadForm.goal.trim(),
           preference: manualLeadForm.preference.trim(),
@@ -345,12 +361,30 @@ export default function DashbordPage() {
 
             <label>
               Phone
-              <input
-                value={manualLeadForm.phone}
-                onChange={(event) => setManualLeadForm((state) => ({ ...state, phone: event.target.value }))}
-                placeholder="+91xxxxxxxxxx"
-                className={manualLeadFieldErrors.phone ? styles.inputError : ""}
-              />
+              <div className={styles.phoneInputRow}>
+                <select
+                  value={manualLeadForm.countryCode}
+                  onChange={(event) => setManualLeadForm((state) => ({ ...state, countryCode: event.target.value }))}
+                  className={manualLeadFieldErrors.phone ? styles.inputError : ""}
+                  aria-label="Country code"
+                >
+                  {COUNTRY_OPTIONS.map((country) => (
+                    <option key={country.dialCode} value={country.dialCode}>
+                      {country.flag} {country.name} ({country.dialCode})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={manualLeadForm.phone}
+                  onChange={(event) =>
+                    setManualLeadForm((state) => ({ ...state, phone: event.target.value.replace(/[^0-9]/g, "") }))
+                  }
+                  placeholder="Enter phone number"
+                  className={manualLeadFieldErrors.phone ? styles.inputError : ""}
+                />
+              </div>
               {manualLeadFieldErrors.phone && <span className={styles.fieldError}>{manualLeadFieldErrors.phone}</span>}
             </label>
 

@@ -32,9 +32,20 @@ function normalizePhone(phone: string): string {
 
 function errorResponse(error: unknown): NextResponse {
   const message = error instanceof Error ? error.message : "Unknown error";
+  const lower = message.toLowerCase();
 
-  if (message.toLowerCase().includes("missing supabase configuration")) {
+  if (lower.includes("missing supabase configuration")) {
     return NextResponse.json({ ok: false, error: "Server is not configured" }, { status: 503 });
+  }
+
+  if (lower.includes("permission denied") || lower.includes("insufficient_privilege")) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Server write access is not configured. Set a Supabase service role key for backend APIs.",
+      },
+      { status: 503 },
+    );
   }
 
   return NextResponse.json({ ok: false, error: "Internal server error" }, { status: 500 });

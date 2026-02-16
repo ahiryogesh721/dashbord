@@ -97,6 +97,12 @@
   padding: 9px;
 }
 
+.phoneInputRow {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.9fr) 1.1fr;
+  gap: 8px;
+}
+
 .inputError {
   border-color: var(--danger-color) !important;
 }
@@ -360,5 +366,11 @@
 
   .progressList li {
     grid-template-columns: 120px 1fr 35px;
+  }
+}
+
+@media (max-width: 900px) {
+  .phoneInputRow {
+    grid-template-columns: 1fr;
   }
 }
