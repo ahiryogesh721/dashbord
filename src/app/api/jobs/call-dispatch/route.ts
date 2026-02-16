@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { dispatchOmniCall } from "@/lib/omni";
-import { getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-server";
+import { getSupabaseServerClient, getSupabaseServerRuntimeInfo, throwIfSupabaseError } from "@/lib/supabase-server";
 import { Json } from "@/lib/supabase-types";
 
 const ACTIVE_LEAD_STAGES = ["new", "contacted", "visit_scheduled"] as const;
 const CALL_BATCH_SIZE = 20;
+let hasValidatedDispatchDbAccess = false;
+let hasLoggedDispatchRuntimeInfo = false;
 
 type LeadRow = {
   id: string;
@@ -59,8 +61,48 @@ function buildRawPayloadWithDispatchMeta(existing: Json | null, details: Record<
   };
 }
 
-async function seedFollowUpsForUncalledLeads(): Promise<number> {
-  const supabase = getSupabaseServerClient();
+function runtimeInfoForLogs(): ReturnType<typeof getSupabaseServerRuntimeInfo> | { unavailable: true; reason: string } {
+  try {
+    return getSupabaseServerRuntimeInfo();
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Unknown runtime info error";
+    return { unavailable: true, reason };
+  }
+}
+
+function logDispatchRuntimeInfoOnce(): void {
+  if (hasLoggedDispatchRuntimeInfo) return;
+  hasLoggedDispatchRuntimeInfo = true;
+
+  const runtime = getSupabaseServerRuntimeInfo();
+  console.info("call-dispatch auth context", runtime);
+}
+
+async function validateDispatchDbAccess(
+  supabase: ReturnType<typeof getSupabaseServerClient>,
+): Promise<void> {
+  if (hasValidatedDispatchDbAccess) return;
+
+  const [leadsAccess, followUpsAccess] = await Promise.all([
+    supabase.from("leads").select("id").limit(1),
+    supabase.from("follow_ups").select("id").limit(1),
+  ]);
+
+  if (leadsAccess.error || followUpsAccess.error) {
+    const runtime = getSupabaseServerRuntimeInfo();
+    const message = leadsAccess.error?.message ?? followUpsAccess.error?.message ?? "Unknown permission check error";
+
+    throw new Error(
+      `Call-dispatch DB permission check failed: ${message} [supabase_auth_role=${runtime.authRole}; key_source=${runtime.keySource}; privileged=${runtime.isPrivileged}]`,
+    );
+  }
+
+  hasValidatedDispatchDbAccess = true;
+}
+
+async function seedFollowUpsForUncalledLeads(
+  supabase: ReturnType<typeof getSupabaseServerClient>,
+): Promise<number> {
 
   const leadsResponse = await supabase
     .from("leads")
@@ -130,13 +172,22 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseServerClient({
+      requirePrivileged: true,
+      context: "call-dispatch",
+    });
+    logDispatchRuntimeInfoOnce();
+    await validateDispatchDbAccess(supabase);
+
     const nowIso = new Date().toISOString();
     let seededFollowUps = 0;
     try {
-      seededFollowUps = await seedFollowUpsForUncalledLeads();
+      seededFollowUps = await seedFollowUpsForUncalledLeads(supabase);
     } catch (error) {
-      console.error("Unable to seed follow-ups; continuing with existing pending items", error);
+      console.error("Unable to seed follow-ups; continuing with existing pending items", {
+        runtime: runtimeInfoForLogs(),
+        error,
+      });
     }
 
     const dueFollowUpsResponse = await supabase
@@ -274,7 +325,10 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    console.error("call-dispatch failed", error);
+    console.error("call-dispatch failed", {
+      runtime: runtimeInfoForLogs(),
+      error,
+    });
     return NextResponse.json({ ok: false, error: "Dispatch failed" }, { status: 500 });
   }
 }

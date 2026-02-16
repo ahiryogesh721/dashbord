@@ -75,6 +75,8 @@ Optional hardening variables:
 - `N8N_WEBHOOK_SECRET`
 - `N8N_DISPATCH_SECRET` (or legacy `CRON_JOB_SECRET`)
 
+For production server routes and scheduled jobs, provide `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SECRET_KEY` so backend reads/writes do not run under anon/publishable permissions.
+
 `OPENAI_API_KEY` is optional and only needed for Hindi-to-English translation fallback.
 
 ## n8n Integration

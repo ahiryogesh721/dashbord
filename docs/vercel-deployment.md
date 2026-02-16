@@ -26,6 +26,8 @@ Optional hardening variables:
 - `N8N_DISPATCH_SECRET` (legacy fallback: `CRON_JOB_SECRET`)
 - Optional for Hindi translation fallback: `OPENAI_API_KEY`
 
+For backend jobs (`/api/jobs/call-dispatch`) and server-side dashboard reads, configure `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SECRET_KEY`.
+
 Example keys only (do not use real secrets in docs):
 
 ```env
