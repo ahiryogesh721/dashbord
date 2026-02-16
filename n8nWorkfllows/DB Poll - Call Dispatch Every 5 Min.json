@@ -1,0 +1,127 @@
+{
+  "name": "DB Poll - Call Dispatch Every 5 Min",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/5 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "99194ef9-0307-4d3d-95af-d58f4963a98f",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        260,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9bc16f7f-3737-4f27-8ded-8114e89b4e73",
+              "name": "dispatch_url",
+              "value": "={{ $env.CALL_DISPATCH_URL || 'https://your-domain.com/api/jobs/call-dispatch' }}",
+              "type": "string"
+            },
+            {
+              "id": "9ec2be9f-dd4b-4906-b7ab-4efce7e4dbf2",
+              "name": "cron_secret",
+              "value": "={{ $env.CRON_JOB_SECRET || 'replace-me' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9a7cb294-264f-445a-b50f-2d0f764468d8",
+      "name": "Set Endpoint + Secret",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        500,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.dispatch_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.cron_secret }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": false,
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "4f5a4f80-faf0-4f7e-a5d8-46f35fd91d58",
+      "name": "Trigger Call Dispatch API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        240
+      ],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Set Endpoint + Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Endpoint + Secret": {
+      "main": [
+        [
+          {
+            "node": "Trigger Call Dispatch API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "6ca53ab7-b240-48de-a963-1c40b4f867ac",
+  "meta": {
+    "instanceId": "95f0102ab8d9455ba603425f2d84b081ba707de23cd11e8e1f84f6863ed392c9"
+  },
+  "id": "db-poll-call-dispatch-5m",
+  "tags": []
+}
