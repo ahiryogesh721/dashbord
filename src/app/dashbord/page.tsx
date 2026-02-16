@@ -58,6 +58,7 @@ type ManualLeadFormState = {
 type ManualLeadFieldErrors = Partial<Record<keyof ManualLeadFormState, string>>;
 
 const PAGE_SIZE = 25;
+
 const INITIAL_FORM: ManualLeadFormState = {
   customer_name: "",
   countryCode: "+91",
@@ -82,6 +83,7 @@ export default function DashbordPage() {
   const [leadData, setLeadData] = useState<LeadListData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [degraded, setDegraded] = useState(false);
 
   const [stageFilter, setStageFilter] = useState<string>("");
   const [interestFilter, setInterestFilter] = useState<string>("");
@@ -104,6 +106,7 @@ export default function DashbordPage() {
     async function loadData() {
       setLoading(true);
       setError(null);
+      setDegraded(false);
 
       const query = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
       if (stageFilter) query.set("stage", stageFilter);
@@ -119,12 +122,13 @@ export default function DashbordPage() {
           throw new Error("Unable to load dashboard data. Please verify server configuration.");
         }
 
-        const metricsJson = (await metricsRes.json()) as { data: FounderMetrics };
-        const leadsJson = (await leadsRes.json()) as { data: LeadListData };
+        const metricsJson = (await metricsRes.json()) as { data: FounderMetrics; degraded?: boolean };
+        const leadsJson = (await leadsRes.json()) as { data: LeadListData; degraded?: boolean };
 
         if (!mounted) return;
         setMetrics(metricsJson.data);
         setLeadData(leadsJson.data);
+        setDegraded(Boolean(metricsJson.degraded || leadsJson.degraded));
       } catch (loadErr) {
         if (!mounted) return;
         setError(loadErr instanceof Error ? loadErr.message : "Unknown error");
@@ -148,10 +152,7 @@ export default function DashbordPage() {
     [metrics],
   );
 
-  const topStageCount = useMemo(
-    () => Math.max(1, ...stageBreakdownEntries.map((entry) => entry.count)),
-    [stageBreakdownEntries],
-  );
+  const topStageCount = useMemo(() => Math.max(1, ...stageBreakdownEntries.map((entry) => entry.count)), [stageBreakdownEntries]);
 
   const filteredLeads = useMemo(() => {
     const leads = leadData?.leads ?? [];
@@ -300,253 +301,296 @@ export default function DashbordPage() {
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
-        <div>
-          <h1>Smart Leads Dashbord</h1>
-          <p>
-            Interactive view of your lead funnel, conversion trends, sales ownership, and project sources so everyone knows
-            exactly where we are right now.
-          </p>
+        <div className={styles.heroBackdrop} />
+        <div className={styles.heroTopRow}>
+          <div>
+            <p className={styles.eyebrow}>Sales Command Center</p>
+            <h1>Real-time Lead Intelligence Dashboard</h1>
+            <p className={styles.heroSubtext}>
+              A cleaner, faster dashboard with live pipeline visibility, smart filtering, action-first workflows, and instant
+              manual lead capture.
+            </p>
+          </div>
+          <div className={styles.heroActions}>
+            <button
+              type="button"
+              className={styles.primaryButton}
+              onClick={() => {
+                setPage(1);
+                setRefreshTick((value) => value + 1);
+              }}
+            >
+              Refresh Data
+            </button>
+            <button type="button" className={styles.ghostButton} onClick={resetFilters}>
+              Reset
+            </button>
+          </div>
         </div>
-        <div className={styles.heroActions}>
-          <button
-            type="button"
-            className={styles.refreshButton}
-            onClick={() => {
-              setPage(1);
-              setRefreshTick((value) => value + 1);
-            }}
-          >
-            Refresh Snapshot
-          </button>
-          <button type="button" className={styles.secondaryButton} onClick={resetFilters}>
-            Reset Filters
-          </button>
+
+        <div className={styles.kpiGrid}>
+          <KpiCard label="Total Leads" value={metrics?.totalLeads ?? 0} subtitle="All captured leads" />
+          <KpiCard label="Avg Lead Score" value={metrics?.avgScore ?? "—"} subtitle="Quality across funnel" />
+          <KpiCard label="Conversion Rate" value={`${metrics?.conversionRate ?? 0}%`} subtitle="Closed / total" />
+          <KpiCard label="Follow-ups Today" value={metrics?.followUpsDueToday ?? 0} subtitle="Pending callbacks" />
+          <KpiCard label="Visible Leads" value={filteredLeads.length} subtitle="After search/filter" />
+          <KpiCard label="Visible Avg Score" value={visibleAvgScore} subtitle="Current table view" />
         </div>
       </section>
 
-      <section className={styles.formSection}>
-        <div className={styles.formHeaderRow}>
-          <div className={styles.formHeader}>
-            <h2>Add Lead</h2>
-            <p>Keep the page clean by opening this form only when needed.</p>
+      {degraded && (
+        <section className={styles.noticeCard}>
+          <strong>Limited data mode:</strong> Some backend metrics are temporarily unavailable, so fallback values are shown.
+        </section>
+      )}
+
+      <section className={styles.controlRow}>
+        <article className={styles.card}>
+          <div className={styles.cardHeader}>
+            <h2>Lead Intake</h2>
+            <button
+              type="button"
+              className={styles.ghostButton}
+              onClick={() => {
+                setShowManualForm((prev) => !prev);
+                setManualLeadError(null);
+                setManualLeadSuccess(null);
+              }}
+              aria-expanded={showManualForm}
+            >
+              {showManualForm ? "Hide Form" : "Add Lead"}
+            </button>
           </div>
-          <button
-            type="button"
-            className={styles.secondaryButton}
-            onClick={() => {
-              setShowManualForm((prev) => !prev);
-              setManualLeadError(null);
-              setManualLeadSuccess(null);
-            }}
-            aria-expanded={showManualForm}
-          >
-            {showManualForm ? "Hide Lead Form" : "Add Lead"}
-          </button>
-        </div>
 
-        {showManualForm && (
-          <form className={styles.manualLeadForm} onSubmit={handleManualLeadSubmit} noValidate>
-            <label>
-              Name
-              <input
-                value={manualLeadForm.customer_name}
-                onChange={(event) =>
-                  setManualLeadForm((state) => ({ ...state, customer_name: event.target.value }))
-                }
-                placeholder="Lead name"
-                className={manualLeadFieldErrors.customer_name ? styles.inputError : ""}
-              />
-              {manualLeadFieldErrors.customer_name && <span className={styles.fieldError}>{manualLeadFieldErrors.customer_name}</span>}
-            </label>
+          {showManualForm && (
+            <form className={styles.manualLeadForm} onSubmit={handleManualLeadSubmit} noValidate>
+              <label>
+                Name
+                <input
+                  value={manualLeadForm.customer_name}
+                  onChange={(event) => setManualLeadForm((state) => ({ ...state, customer_name: event.target.value }))}
+                  placeholder="Lead full name"
+                  className={manualLeadFieldErrors.customer_name ? styles.inputError : ""}
+                />
+                {manualLeadFieldErrors.customer_name && <span className={styles.fieldError}>{manualLeadFieldErrors.customer_name}</span>}
+              </label>
 
-            <label>
-              Phone
-              <div className={styles.phoneInputRow}>
+              <label>
+                Phone
+                <div className={styles.phoneInputRow}>
+                  <select
+                    value={manualLeadForm.countryCode}
+                    onChange={(event) => setManualLeadForm((state) => ({ ...state, countryCode: event.target.value }))}
+                    className={manualLeadFieldErrors.phone ? styles.inputError : ""}
+                    aria-label="Country code"
+                  >
+                    {COUNTRY_OPTIONS.map((country) => (
+                      <option key={country.dialCode} value={country.dialCode}>
+                        {country.flag} {country.name} ({country.dialCode})
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    value={manualLeadForm.phone}
+                    onChange={(event) =>
+                      setManualLeadForm((state) => ({ ...state, phone: event.target.value.replace(/[^0-9]/g, "") }))
+                    }
+                    placeholder="Phone number"
+                    className={manualLeadFieldErrors.phone ? styles.inputError : ""}
+                  />
+                </div>
+                {manualLeadFieldErrors.phone && <span className={styles.fieldError}>{manualLeadFieldErrors.phone}</span>}
+              </label>
+
+              <label>
+                Source
+                <input
+                  value={manualLeadForm.source}
+                  onChange={(event) => setManualLeadForm((state) => ({ ...state, source: event.target.value }))}
+                  placeholder="manual / website / meta_ads"
+                  className={manualLeadFieldErrors.source ? styles.inputError : ""}
+                />
+                {manualLeadFieldErrors.source && <span className={styles.fieldError}>{manualLeadFieldErrors.source}</span>}
+              </label>
+
+              <label>
+                Goal
+                <input
+                  value={manualLeadForm.goal}
+                  onChange={(event) => setManualLeadForm((state) => ({ ...state, goal: event.target.value }))}
+                  placeholder="Need 3BHK in Gurugram"
+                  className={manualLeadFieldErrors.goal ? styles.inputError : ""}
+                />
+                {manualLeadFieldErrors.goal && <span className={styles.fieldError}>{manualLeadFieldErrors.goal}</span>}
+              </label>
+
+              <label>
+                Preference
+                <input
+                  value={manualLeadForm.preference}
+                  onChange={(event) => setManualLeadForm((state) => ({ ...state, preference: event.target.value }))}
+                  placeholder="Budget / location / timeline"
+                  className={manualLeadFieldErrors.preference ? styles.inputError : ""}
+                />
+                {manualLeadFieldErrors.preference && <span className={styles.fieldError}>{manualLeadFieldErrors.preference}</span>}
+              </label>
+
+              <label>
+                Interest
                 <select
-                  value={manualLeadForm.countryCode}
-                  onChange={(event) => setManualLeadForm((state) => ({ ...state, countryCode: event.target.value }))}
-                  className={manualLeadFieldErrors.phone ? styles.inputError : ""}
-                  aria-label="Country code"
+                  value={manualLeadForm.interest_label}
+                  onChange={(event) => setManualLeadForm((state) => ({ ...state, interest_label: event.target.value }))}
+                  className={manualLeadFieldErrors.interest_label ? styles.inputError : ""}
                 >
-                  {COUNTRY_OPTIONS.map((country) => (
-                    <option key={country.dialCode} value={country.dialCode}>
-                      {country.flag} {country.name} ({country.dialCode})
+                  <option value="">Select interest</option>
+                  {INTEREST_LABELS.map((interest) => (
+                    <option key={interest} value={interest}>
+                      {formatLabel(interest)}
                     </option>
                   ))}
                 </select>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  value={manualLeadForm.phone}
-                  onChange={(event) =>
-                    setManualLeadForm((state) => ({ ...state, phone: event.target.value.replace(/[^0-9]/g, "") }))
-                  }
-                  placeholder="Enter phone number"
-                  className={manualLeadFieldErrors.phone ? styles.inputError : ""}
-                />
-              </div>
-              {manualLeadFieldErrors.phone && <span className={styles.fieldError}>{manualLeadFieldErrors.phone}</span>}
-            </label>
+                {manualLeadFieldErrors.interest_label && <span className={styles.fieldError}>{manualLeadFieldErrors.interest_label}</span>}
+              </label>
 
-            <label>
-              Source
-              <input
-                value={manualLeadForm.source}
-                onChange={(event) => setManualLeadForm((state) => ({ ...state, source: event.target.value }))}
-                placeholder="manual / meta_ads / website"
-                className={manualLeadFieldErrors.source ? styles.inputError : ""}
-              />
-              {manualLeadFieldErrors.source && <span className={styles.fieldError}>{manualLeadFieldErrors.source}</span>}
-            </label>
+              <button type="submit" className={styles.primaryButton} disabled={manualLeadLoading}>
+                {manualLeadLoading ? "Adding Lead..." : "Create Lead"}
+              </button>
+            </form>
+          )}
 
-            <label>
-              Goal
-              <input
-                value={manualLeadForm.goal}
-                onChange={(event) => setManualLeadForm((state) => ({ ...state, goal: event.target.value }))}
-                placeholder="2BHK in Gurugram"
-                className={manualLeadFieldErrors.goal ? styles.inputError : ""}
-              />
-              {manualLeadFieldErrors.goal && <span className={styles.fieldError}>{manualLeadFieldErrors.goal}</span>}
-            </label>
+          {manualLeadError && <p className={styles.error}>{manualLeadError}</p>}
+          {manualLeadSuccess && <p className={styles.success}>{manualLeadSuccess}</p>}
+        </article>
 
+        <article className={styles.card}>
+          <div className={styles.cardHeader}>
+            <h2>Live Filters</h2>
+          </div>
+          <div className={styles.filterGrid}>
             <label>
-              Preference
-              <input
-                value={manualLeadForm.preference}
-                onChange={(event) => setManualLeadForm((state) => ({ ...state, preference: event.target.value }))}
-                placeholder="Budget / area / timeline"
-                className={manualLeadFieldErrors.preference ? styles.inputError : ""}
-              />
-              {manualLeadFieldErrors.preference && <span className={styles.fieldError}>{manualLeadFieldErrors.preference}</span>}
+              Stage
+              <select
+                value={stageFilter}
+                onChange={(event) => {
+                  setPage(1);
+                  setStageFilter(event.target.value);
+                }}
+              >
+                <option value="">All stages</option>
+                {LEAD_STAGES.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {formatLabel(stage)}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label>
               Interest
               <select
-                value={manualLeadForm.interest_label}
-                onChange={(event) => setManualLeadForm((state) => ({ ...state, interest_label: event.target.value }))}
-                className={manualLeadFieldErrors.interest_label ? styles.inputError : ""}
+                value={interestFilter}
+                onChange={(event) => {
+                  setPage(1);
+                  setInterestFilter(event.target.value);
+                }}
               >
-                <option value="">Select interest</option>
+                <option value="">All interest levels</option>
                 {INTEREST_LABELS.map((interest) => (
                   <option key={interest} value={interest}>
                     {formatLabel(interest)}
                   </option>
                 ))}
               </select>
-              {manualLeadFieldErrors.interest_label && <span className={styles.fieldError}>{manualLeadFieldErrors.interest_label}</span>}
             </label>
 
-            <button type="submit" className={styles.submitButton} disabled={manualLeadLoading}>
-              {manualLeadLoading ? "Adding..." : "Add Lead"}
-            </button>
-          </form>
-        )}
-
-        {manualLeadError && <p className={styles.error}>{manualLeadError}</p>}
-        {manualLeadSuccess && <p className={styles.success}>{manualLeadSuccess}</p>}
+            <label className={styles.searchField}>
+              Search
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search name, phone, source, rep"
+              />
+            </label>
+          </div>
+        </article>
       </section>
 
-      <section className={styles.filters}>
-        <label>
-          Stage
-          <select
-            value={stageFilter}
-            onChange={(event) => {
-              setPage(1);
-              setStageFilter(event.target.value);
-            }}
-          >
-            <option value="">All stages</option>
-            {LEAD_STAGES.map((stage) => (
-              <option key={stage} value={stage}>
-                {formatLabel(stage)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          Interest
-          <select
-            value={interestFilter}
-            onChange={(event) => {
-              setPage(1);
-              setInterestFilter(event.target.value);
-            }}
-          >
-            <option value="">All interest levels</option>
-            {INTEREST_LABELS.map((interest) => (
-              <option key={interest} value={interest}>
-                {formatLabel(interest)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          Search
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search name, phone, source, rep"
-          />
-        </label>
-      </section>
-
-      {loading && <p className={styles.status}>Loading dashboard...</p>}
+      {loading && <p className={styles.status}>Loading dashboard…</p>}
       {error && <p className={styles.error}>{error}</p>}
 
-      {!loading && !error && metrics && leadData && (
+      {!loading && !error && (
         <>
-          <section className={styles.metricsGrid}>
-            <MetricCard label="Total Leads" value={metrics.totalLeads} hint="All-time captured leads" />
-            <MetricCard label="Avg Lead Score" value={metrics.avgScore} hint="Scoring quality signal" />
-            <MetricCard label="Conversion Rate" value={`${metrics.conversionRate}%`} hint="Closed vs total" />
-            <MetricCard label="Follow-ups Today" value={metrics.followUpsDueToday} hint="Pending actions" />
-            <MetricCard label="Visible Leads" value={filteredLeads.length} hint="Current filtered view" />
-            <MetricCard label="Visible Avg Score" value={visibleAvgScore} hint="Current filtered view quality" />
-          </section>
-
-          <section className={styles.progressSection}>
-            <article className={styles.panel}>
-              <h2>Pipeline Stage Distribution</h2>
+          <section className={styles.analyticsGrid}>
+            <article className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h2>Pipeline Distribution</h2>
+              </div>
               <ul className={styles.progressList}>
-                {stageBreakdownEntries.map((entry) => (
-                  <li key={entry.stage}>
-                    <button type="button" onClick={() => setStageFilter(entry.stage)} className={styles.stageButton}>
-                      {formatLabel(entry.stage)}
-                    </button>
-                    <div className={styles.progressTrack}>
-                      <span style={{ width: `${(entry.count / topStageCount) * 100}%` }} />
-                    </div>
-                    <strong>{entry.count}</strong>
-                  </li>
-                ))}
+                {stageBreakdownEntries.map((entry) => {
+                  const pct = Math.round((entry.count / topStageCount) * 100);
+
+                  return (
+                    <li key={entry.stage}>
+                      <button
+                        type="button"
+                        className={styles.stageButton}
+                        onClick={() => {
+                          setStageFilter(entry.stage);
+                          setPage(1);
+                        }}
+                      >
+                        {formatLabel(entry.stage)}
+                      </button>
+                      <div className={styles.progressTrack}>
+                        <span style={{ width: `${Math.max(4, pct)}%` }} />
+                      </div>
+                      <strong>{entry.count}</strong>
+                    </li>
+                  );
+                })}
               </ul>
             </article>
 
-            <article className={styles.panel}>
-              <h2>Interest Mix</h2>
+            <article className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h2>Interest Breakdown</h2>
+              </div>
               <ul className={styles.compactList}>
-                {INTEREST_LABELS.map((label) => (
-                  <li key={label}>
-                    <span>{formatLabel(label)}</span>
-                    <strong>{metrics.interestBreakdown[label] ?? 0}</strong>
+                {INTEREST_LABELS.map((interest) => (
+                  <li key={interest}>
+                    <span>{formatLabel(interest)}</span>
+                    <strong>{metrics?.interestBreakdown[interest] ?? 0}</strong>
                   </li>
                 ))}
               </ul>
+              <div className={styles.visitStats}>
+                <p>
+                  <span>Site Visits Scheduled</span>
+                  <strong>{metrics?.visits.scheduled ?? 0}</strong>
+                </p>
+                <p>
+                  <span>Site Visits Completed</span>
+                  <strong>{metrics?.visits.completed ?? 0}</strong>
+                </p>
+              </div>
             </article>
           </section>
 
           <section className={styles.tableSection}>
-            <div className={styles.tableHeading}>
-              <h2>Lead Details ({leadData.total})</h2>
+            <div className={styles.cardHeader}>
+              <h2>Lead Pipeline Table</h2>
               <div className={styles.sortButtons}>
-                <button type="button" onClick={() => toggleSort("createdAt")}>Date</button>
-                <button type="button" onClick={() => toggleSort("score")}>Score</button>
-                <button type="button" onClick={() => toggleSort("customerName")}>Name</button>
+                <button type="button" onClick={() => toggleSort("createdAt")}>
+                  Date {sortField === "createdAt" ? `(${sortDir})` : ""}
+                </button>
+                <button type="button" onClick={() => toggleSort("score")}>
+                  Score {sortField === "score" ? `(${sortDir})` : ""}
+                </button>
+                <button type="button" onClick={() => toggleSort("customerName")}>
+                  Name {sortField === "customerName" ? `(${sortDir})` : ""}
+                </button>
               </div>
             </div>
 
@@ -556,36 +600,36 @@ export default function DashbordPage() {
                   <tr>
                     <th>Customer</th>
                     <th>Phone</th>
-                    <th>Project/Source</th>
+                    <th>Source</th>
                     <th>Stage</th>
                     <th>Interest</th>
                     <th>Score</th>
-                    <th>Sales Rep</th>
+                    <th>Rep</th>
                     <th>Created</th>
                   </tr>
                 </thead>
                 <tbody>
+                  {filteredLeads.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className={styles.emptyRow}>
+                        No leads found for current filters.
+                      </td>
+                    </tr>
+                  )}
                   {filteredLeads.map((lead) => (
                     <tr key={lead.id}>
-                      <td>{lead.customerName ?? "Unknown"}</td>
+                      <td>{lead.customerName ?? "—"}</td>
                       <td>{lead.phone ?? "—"}</td>
                       <td>{lead.source}</td>
                       <td>
                         <span className={styles.badge}>{formatLabel(lead.stage)}</span>
                       </td>
                       <td>{lead.interestLabel ? formatLabel(lead.interestLabel) : "—"}</td>
-                      <td>{lead.score ?? "—"}</td>
+                      <td>{typeof lead.score === "number" ? lead.score : "—"}</td>
                       <td>{lead.salesRep?.name ?? "Unassigned"}</td>
                       <td>{new Date(lead.createdAt).toLocaleString()}</td>
                     </tr>
                   ))}
-                  {filteredLeads.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className={styles.emptyRow}>
-                        No leads found with current filters.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
@@ -595,12 +639,12 @@ export default function DashbordPage() {
                 Previous
               </button>
               <span>
-                Page {leadData.page} of {Math.max(1, leadData.totalPages)}
+                Page {leadData?.page ?? 1} of {Math.max(1, leadData?.totalPages ?? 1)}
               </span>
               <button
                 type="button"
-                onClick={() => setPage((current) => Math.min(leadData.totalPages || 1, current + 1))}
-                disabled={page >= (leadData.totalPages || 1)}
+                onClick={() => setPage((current) => Math.min(leadData?.totalPages || 1, current + 1))}
+                disabled={page >= (leadData?.totalPages || 1)}
               >
                 Next
               </button>
@@ -612,12 +656,12 @@ export default function DashbordPage() {
   );
 }
 
-function MetricCard({ label, value, hint }: { label: string; value: string | number; hint: string }) {
+function KpiCard({ label, value, subtitle }: { label: string; value: string | number; subtitle: string }) {
   return (
-    <article className={styles.metricCard}>
+    <article className={styles.kpiCard}>
       <p>{label}</p>
       <strong>{value}</strong>
-      <small>{hint}</small>
+      <small>{subtitle}</small>
     </article>
   );
 }
