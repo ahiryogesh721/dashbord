@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { dispatchOmniCall } from "@/lib/omni";
-import { getSupabaseServerClient, getSupabaseServerRuntimeInfo, throwIfSupabaseError } from "@/lib/supabase-server";
+import { getSupabaseAdminClient, getSupabaseAdminRuntimeInfo, throwIfSupabaseError } from "@/lib/supabase-server";
 import { Json } from "@/lib/supabase-types";
 
 const ACTIVE_LEAD_STAGES = ["new", "contacted", "visit_scheduled"] as const;
@@ -61,25 +61,24 @@ function buildRawPayloadWithDispatchMeta(existing: Json | null, details: Record<
   };
 }
 
-function runtimeInfoForLogs(): ReturnType<typeof getSupabaseServerRuntimeInfo> | { unavailable: true; reason: string } {
+function runtimeInfoForLogs(): ReturnType<typeof getSupabaseAdminRuntimeInfo> | { unavailable: true; reason: string } {
   try {
-    return getSupabaseServerRuntimeInfo();
+    return getSupabaseAdminRuntimeInfo();
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Unknown runtime info error";
     return { unavailable: true, reason };
   }
 }
 
-function logDispatchRuntimeInfoOnce(): void {
+function logDispatchRuntimeInfoOnce(runtime: ReturnType<typeof getSupabaseAdminRuntimeInfo>): void {
   if (hasLoggedDispatchRuntimeInfo) return;
   hasLoggedDispatchRuntimeInfo = true;
-
-  const runtime = getSupabaseServerRuntimeInfo();
   console.info("call-dispatch auth context", runtime);
 }
 
 async function validateDispatchDbAccess(
-  supabase: ReturnType<typeof getSupabaseServerClient>,
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  runtime: ReturnType<typeof getSupabaseAdminRuntimeInfo>,
 ): Promise<void> {
   if (hasValidatedDispatchDbAccess) return;
 
@@ -89,7 +88,6 @@ async function validateDispatchDbAccess(
   ]);
 
   if (leadsAccess.error || followUpsAccess.error) {
-    const runtime = getSupabaseServerRuntimeInfo();
     const message = leadsAccess.error?.message ?? followUpsAccess.error?.message ?? "Unknown permission check error";
 
     throw new Error(
@@ -101,7 +99,8 @@ async function validateDispatchDbAccess(
 }
 
 async function seedFollowUpsForUncalledLeads(
-  supabase: ReturnType<typeof getSupabaseServerClient>,
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  runtime: ReturnType<typeof getSupabaseAdminRuntimeInfo>,
 ): Promise<number> {
 
   const leadsResponse = await supabase
@@ -113,7 +112,7 @@ async function seedFollowUpsForUncalledLeads(
     .order("created_at", { ascending: true })
     .limit(CALL_BATCH_SIZE);
 
-  throwIfSupabaseError("Unable to load uncalled leads", leadsResponse.error);
+  throwIfSupabaseError("Unable to load uncalled leads", leadsResponse.error, runtime);
 
   const leads = (leadsResponse.data ?? []) as Array<{
     id: string;
@@ -132,7 +131,7 @@ async function seedFollowUpsForUncalledLeads(
     .in("lead_id", leadIds)
     .in("status", ["pending", "completed"]);
 
-  throwIfSupabaseError("Unable to load existing follow-ups", existingFollowUpsResponse.error);
+  throwIfSupabaseError("Unable to load existing follow-ups", existingFollowUpsResponse.error, runtime);
 
   const followUpRows = (existingFollowUpsResponse.data ?? []) as FollowUpLeadIdRow[];
   const hasFollowUp = new Set(followUpRows.map((row) => row.lead_id));
@@ -154,7 +153,7 @@ async function seedFollowUpsForUncalledLeads(
     })),
   );
 
-  throwIfSupabaseError("Unable to seed follow-ups for uncalled leads", insertResponse.error);
+  throwIfSupabaseError("Unable to seed follow-ups for uncalled leads", insertResponse.error, runtime);
   return leadsToSeed.length;
 }
 
@@ -172,17 +171,17 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const supabase = getSupabaseServerClient({
-      requirePrivileged: true,
+    const supabase = getSupabaseAdminClient({
       context: "call-dispatch",
     });
-    logDispatchRuntimeInfoOnce();
-    await validateDispatchDbAccess(supabase);
+    const runtime = getSupabaseAdminRuntimeInfo();
+    logDispatchRuntimeInfoOnce(runtime);
+    await validateDispatchDbAccess(supabase, runtime);
 
     const nowIso = new Date().toISOString();
     let seededFollowUps = 0;
     try {
-      seededFollowUps = await seedFollowUpsForUncalledLeads(supabase);
+      seededFollowUps = await seedFollowUpsForUncalledLeads(supabase, runtime);
     } catch (error) {
       console.error("Unable to seed follow-ups; continuing with existing pending items", {
         runtime: runtimeInfoForLogs(),
@@ -198,7 +197,7 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
       .order("due_at", { ascending: true })
       .limit(CALL_BATCH_SIZE);
 
-    throwIfSupabaseError("Unable to load due follow-ups", dueFollowUpsResponse.error);
+    throwIfSupabaseError("Unable to load due follow-ups", dueFollowUpsResponse.error, runtime);
 
     const dueFollowUps = (dueFollowUpsResponse.data ?? []) as FollowUpRow[];
     if (dueFollowUps.length === 0) {
@@ -221,7 +220,7 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
       .select("id,customer_name,phone,source,call_date,stage,raw_payload")
       .in("id", leadIds);
 
-    throwIfSupabaseError("Unable to load lead records", leadsResponse.error);
+    throwIfSupabaseError("Unable to load lead records", leadsResponse.error, runtime);
 
     const leads = (leadsResponse.data ?? []) as LeadRow[];
     const leadById = new Map(leads.map((lead) => [lead.id, lead]));

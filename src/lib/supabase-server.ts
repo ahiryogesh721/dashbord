@@ -19,22 +19,32 @@ type SupabaseKeySource =
 
 type SupabaseAuthRole = "service_role" | "anon" | "unknown";
 
+type SupabaseRuntimeInfo = {
+  authRole: SupabaseAuthRole;
+  keySource: SupabaseKeySource;
+  isPrivileged: boolean;
+};
+
 type ResolvedSupabaseConfig = {
   url: string;
   key: string;
-  keySource: SupabaseKeySource;
-  authRole: SupabaseAuthRole;
-  isPrivileged: boolean;
-};
+} & SupabaseRuntimeInfo;
 
 type SupabaseServerClientOptions = {
   requirePrivileged?: boolean;
   context?: string;
 };
 
+type SupabaseAdminClientOptions = {
+  context?: string;
+};
+
 let cachedClient: SupabaseClient<Database> | null = null;
 let cachedUrl: string | null = null;
 let cachedKey: string | null = null;
+let cachedAdminClient: SupabaseClient<Database> | null = null;
+let cachedAdminUrl: string | null = null;
+let cachedAdminKey: string | null = null;
 let hasWarnedPublishableKey = false;
 
 function decodeBase64Url(value: string): string | null {
@@ -73,9 +83,35 @@ function formatSupabaseAuthInfo(config: { authRole: SupabaseAuthRole; keySource:
   return `supabase_auth_role=${config.authRole}; key_source=${config.keySource}; privileged=${config.isPrivileged}`;
 }
 
-function resolveSupabaseConfig(): ResolvedSupabaseConfig {
+function resolveSupabaseUrl(): string {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) {
+    throw new Error("Missing Supabase configuration. Set SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL.");
+  }
+  return url;
+}
 
+function resolveFirstNonEmptyKey(
+  keyCandidates: Array<{ source: SupabaseKeySource; value: string | undefined }>,
+): { source: SupabaseKeySource; value: string } | null {
+  for (const candidate of keyCandidates) {
+    const value = candidate.value?.trim();
+    if (value) {
+      return { source: candidate.source, value };
+    }
+  }
+  return null;
+}
+
+function buildResolvedConfig(url: string, keySource: SupabaseKeySource, key: string): ResolvedSupabaseConfig {
+  const authRole = inferSupabaseAuthRole(key);
+  const isPrivileged = authRole === "service_role";
+
+  return { url, key, keySource, authRole, isPrivileged };
+}
+
+function resolveSupabaseConfig(): ResolvedSupabaseConfig {
+  const url = resolveSupabaseUrl();
   const keyCandidates: Array<{ source: SupabaseKeySource; value: string | undefined }> = [
     { source: "SUPABASE_SERVICE_ROLE_KEY", value: process.env.SUPABASE_SERVICE_ROLE_KEY },
     { source: "SUPABASE_SECRET_KEY", value: process.env.SUPABASE_SECRET_KEY },
@@ -87,19 +123,16 @@ function resolveSupabaseConfig(): ResolvedSupabaseConfig {
     { source: "NEXT_PUBLIC_SUPABASE_ANON_KEY", value: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY },
   ];
 
-  const keyConfig = keyCandidates.find((candidate) => typeof candidate.value === "string" && candidate.value.length > 0);
-  const key = keyConfig?.value;
-
-  if (!url || !key) {
+  const keyConfig = resolveFirstNonEmptyKey(keyCandidates);
+  if (!keyConfig) {
     throw new Error(
-      "Missing Supabase configuration. Set SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL and one of SUPABASE_SERVICE_ROLE_KEY, SUPABASE_SECRET_KEY, SUPABASE_SERVICE_ROLE, SUPABASE_SERVICE_KEY, SUPABASE_KEY, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY, NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+      "Missing Supabase configuration. Set one of SUPABASE_SERVICE_ROLE_KEY, SUPABASE_SECRET_KEY, SUPABASE_SERVICE_ROLE, SUPABASE_SERVICE_KEY, SUPABASE_KEY, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY, NEXT_PUBLIC_SUPABASE_ANON_KEY.",
     );
   }
 
-  const authRole = inferSupabaseAuthRole(key);
-  const isPrivileged = authRole === "service_role";
+  const resolved = buildResolvedConfig(url, keyConfig.source, keyConfig.value);
+  const { authRole, keySource, isPrivileged } = resolved;
   const isPublishableKey = authRole === "anon";
-  const keySource = keyConfig?.source ?? "NEXT_PUBLIC_SUPABASE_ANON_KEY";
 
   if (isPublishableKey && !hasWarnedPublishableKey) {
     hasWarnedPublishableKey = true;
@@ -112,17 +145,46 @@ function resolveSupabaseConfig(): ResolvedSupabaseConfig {
     );
   }
 
-  return {
-    url,
-    key,
-    keySource,
-    authRole,
-    isPrivileged,
-  };
+  return resolved;
 }
 
-export function getSupabaseServerRuntimeInfo(): { authRole: SupabaseAuthRole; keySource: SupabaseKeySource; isPrivileged: boolean } {
+function resolveSupabaseAdminConfig(): ResolvedSupabaseConfig {
+  const url = resolveSupabaseUrl();
+  const keyCandidates: Array<{ source: SupabaseKeySource; value: string | undefined }> = [
+    { source: "SUPABASE_SERVICE_ROLE_KEY", value: process.env.SUPABASE_SERVICE_ROLE_KEY },
+    { source: "SUPABASE_SECRET_KEY", value: process.env.SUPABASE_SECRET_KEY },
+    { source: "SUPABASE_SERVICE_ROLE", value: process.env.SUPABASE_SERVICE_ROLE },
+    { source: "SUPABASE_SERVICE_KEY", value: process.env.SUPABASE_SERVICE_KEY },
+  ];
+
+  const keyConfig = resolveFirstNonEmptyKey(keyCandidates);
+  if (!keyConfig) {
+    throw new Error(
+      "Missing Supabase admin configuration. Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY on the server.",
+    );
+  }
+
+  const resolved = buildResolvedConfig(url, keyConfig.source, keyConfig.value);
+  if (!resolved.isPrivileged) {
+    throw new Error(
+      `Supabase admin key must be service_role. Current ${formatSupabaseAuthInfo({
+        authRole: resolved.authRole,
+        keySource: resolved.keySource,
+        isPrivileged: resolved.isPrivileged,
+      })}.`,
+    );
+  }
+
+  return resolved;
+}
+
+export function getSupabaseServerRuntimeInfo(): SupabaseRuntimeInfo {
   const { authRole, keySource, isPrivileged } = resolveSupabaseConfig();
+  return { authRole, keySource, isPrivileged };
+}
+
+export function getSupabaseAdminRuntimeInfo(): SupabaseRuntimeInfo {
+  const { authRole, keySource, isPrivileged } = resolveSupabaseAdminConfig();
   return { authRole, keySource, isPrivileged };
 }
 
@@ -156,9 +218,38 @@ export function getSupabaseServerClient(options?: SupabaseServerClientOptions) {
   return cachedClient;
 }
 
-export function throwIfSupabaseError(context: string, error: PostgrestError | null): void {
+export function getSupabaseAdminClient(options?: SupabaseAdminClientOptions) {
+  const { url, key, authRole, keySource, isPrivileged } = resolveSupabaseAdminConfig();
+  if (!isPrivileged) {
+    const suffix = options?.context ? ` for ${options.context}` : "";
+    throw new Error(
+      `Supabase admin client requires privileged credentials${suffix}. Current ${formatSupabaseAuthInfo({
+        authRole,
+        keySource,
+        isPrivileged,
+      })}.`,
+    );
+  }
+
+  if (cachedAdminClient && cachedAdminUrl === url && cachedAdminKey === key) {
+    return cachedAdminClient;
+  }
+
+  cachedAdminUrl = url;
+  cachedAdminKey = key;
+  cachedAdminClient = createClient<Database>(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+
+  return cachedAdminClient;
+}
+
+export function throwIfSupabaseError(context: string, error: PostgrestError | null, runtimeInfo?: SupabaseRuntimeInfo): void {
   if (error) {
-    const runtime = getSupabaseServerRuntimeInfo();
+    const runtime = runtimeInfo ?? getSupabaseServerRuntimeInfo();
     throw new Error(
       `${context}: ${error.message} [${formatSupabaseAuthInfo({
         authRole: runtime.authRole,
