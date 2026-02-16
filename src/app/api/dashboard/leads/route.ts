@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { INTEREST_LABELS, InterestLabel, LEAD_STAGES, LeadStage } from "@/lib/domain";
-import { getPrismaServerClient, shouldFallbackToPrisma } from "@/lib/prisma-server";
-import { getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-server";
+import { getSupabaseAdminClient, getSupabaseAdminRuntimeInfo, throwIfSupabaseError } from "@/lib/supabase-server";
 
 const querySchema = z.object({
   stage: z.enum(LEAD_STAGES).optional(),
@@ -52,13 +51,6 @@ function mapLeadRowToApiLead(lead: LeadRow): ApiLead {
   };
 }
 
-function buildPrismaLeadWhere(filters: LeadFilters): { stage?: LeadStage; interestLabel?: InterestLabel } {
-  const where: { stage?: LeadStage; interestLabel?: InterestLabel } = {};
-  if (filters.stage) where.stage = filters.stage;
-  if (filters.interestLabel) where.interestLabel = filters.interestLabel;
-  return where;
-}
-
 function applyLeadFilters<T extends { eq: (column: string, value: string) => T }>(query: T, filters: LeadFilters): T {
   let filteredQuery = query;
   if (filters.stage) filteredQuery = filteredQuery.eq("stage", filters.stage);
@@ -67,8 +59,9 @@ function applyLeadFilters<T extends { eq: (column: string, value: string) => T }
 }
 
 async function countLeadsWithFallback(
-  supabase: ReturnType<typeof getSupabaseServerClient>,
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
   filters: LeadFilters,
+  runtime: ReturnType<typeof getSupabaseAdminRuntimeInfo>,
 ): Promise<number> {
   const countResponse = await applyLeadFilters(supabase.from("leads").select("id", { count: "exact", head: true }), filters);
 
@@ -85,7 +78,7 @@ async function countLeadsWithFallback(
   while (true) {
     const to = from + pageSize - 1;
     const pageResponse = await applyLeadFilters(supabase.from("leads").select("id").range(from, to), filters);
-    throwIfSupabaseError("Unable to count leads", pageResponse.error);
+    throwIfSupabaseError("Unable to count leads", pageResponse.error, runtime);
 
     const rows = pageResponse.data ?? [];
     total += rows.length;
@@ -116,10 +109,11 @@ function emptyLeadsResponse(page: number, pageSize: number, reason: string): Nex
 }
 
 async function getLeadRowsWithFallback(
-  supabase: ReturnType<typeof getSupabaseServerClient>,
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
   filters: LeadFilters,
   page: number,
   pageSize: number,
+  runtime: ReturnType<typeof getSupabaseAdminRuntimeInfo>,
 ): Promise<LeadRow[]> {
   let leadsQuery = supabase
     .from("leads")
@@ -129,53 +123,18 @@ async function getLeadRowsWithFallback(
 
   leadsQuery = applyLeadFilters(leadsQuery, filters);
   const leadsResponse = await leadsQuery;
-  throwIfSupabaseError("Unable to load lead list", leadsResponse.error);
+  throwIfSupabaseError("Unable to load lead list", leadsResponse.error, runtime);
 
   return (leadsResponse.data ?? []) as LeadRow[];
 }
 
-async function getLeadsWithPrisma(
-  filters: LeadFilters,
-  page: number,
-  pageSize: number,
-): Promise<{ total: number; leads: ApiLead[] }> {
-  const prisma = getPrismaServerClient();
-  const where = buildPrismaLeadWhere(filters);
-
-  const [total, leadRows] = await Promise.all([
-    prisma.lead.count({ where }),
-    prisma.lead.findMany({
-      where,
-      orderBy: {
-        createdAt: "desc",
-      },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      select: {
-        id: true,
-        createdAt: true,
-        customerName: true,
-        phone: true,
-        score: true,
-        interestLabel: true,
-        stage: true,
-        source: true,
-      },
-    }),
-  ]);
-
-  const leads = leadRows.map((lead) => ({
-    id: lead.id,
-    createdAt: lead.createdAt.toISOString(),
-    customerName: lead.customerName,
-    phone: lead.phone,
-    score: lead.score,
-    interestLabel: lead.interestLabel,
-    stage: lead.stage,
-    source: lead.source,
-  }));
-
-  return { total, leads };
+function runtimeInfoForLogs(): ReturnType<typeof getSupabaseAdminRuntimeInfo> | { unavailable: true; reason: string } {
+  try {
+    return getSupabaseAdminRuntimeInfo();
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Unknown runtime info error";
+    return { unavailable: true, reason };
+  }
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -203,13 +162,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const filters: LeadFilters = { stage, interestLabel };
 
   try {
-    const supabase = getSupabaseServerClient();
+    const runtime = getSupabaseAdminRuntimeInfo();
+    const supabase = getSupabaseAdminClient({ context: "dashboard-leads" });
     const accessCheck = await supabase.from("leads").select("id").limit(1);
-    throwIfSupabaseError("Unable to access leads table", accessCheck.error);
+    throwIfSupabaseError("Unable to access leads table", accessCheck.error, runtime);
 
     const [total, leadRows] = await Promise.all([
-      countLeadsWithFallback(supabase, filters),
-      getLeadRowsWithFallback(supabase, filters, page, pageSize),
+      countLeadsWithFallback(supabase, filters, runtime),
+      getLeadRowsWithFallback(supabase, filters, page, pageSize, runtime),
     ]);
 
     const leads = leadRows.map(mapLeadRowToApiLead);
@@ -225,26 +185,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    if (shouldFallbackToPrisma(error)) {
-      try {
-        const { total, leads } = await getLeadsWithPrisma(filters, page, pageSize);
-
-        return NextResponse.json({
-          ok: true,
-          data: {
-            page,
-            pageSize,
-            total,
-            totalPages: Math.ceil(total / pageSize),
-            leads,
-          },
-        });
-      } catch (fallbackError) {
-        console.error("dashboard leads endpoint Prisma fallback failed", fallbackError);
-      }
-    }
-
-    console.error("dashboard leads endpoint failed; returning degraded response", error);
+    console.error("dashboard leads endpoint failed; returning degraded response", {
+      runtime: runtimeInfoForLogs(),
+      error,
+    });
     return emptyLeadsResponse(page, pageSize, "lead_data_unavailable");
   }
 }

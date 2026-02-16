@@ -2,24 +2,10 @@ import { PostgrestError } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 import { INTEREST_LABELS, LEAD_STAGES } from "@/lib/domain";
-import { getPrismaServerClient, shouldFallbackToPrisma } from "@/lib/prisma-server";
-import { fetchAllSupabaseRows, getSupabaseServerClient, throwIfSupabaseError } from "@/lib/supabase-server";
+import { fetchAllSupabaseRows, getSupabaseAdminClient, getSupabaseAdminRuntimeInfo, throwIfSupabaseError } from "@/lib/supabase-server";
 
 type ScoreRow = {
   score: number | null;
-};
-
-type FounderMetricsData = {
-  totalLeads: number;
-  avgScore: number;
-  conversionRate: number;
-  stageBreakdown: Record<string, number>;
-  interestBreakdown: Record<string, number>;
-  visits: {
-    scheduled: number;
-    completed: number;
-  };
-  followUpsDueToday: number;
 };
 
 function emptyStageBreakdown(): Record<string, number> {
@@ -54,6 +40,7 @@ async function countRowsWithFallback(
   context: string,
   fetchExactCount: () => Promise<{ count: number | null; error: PostgrestError | null }>,
   fetchPage: (from: number, to: number) => Promise<{ data: { id: string }[] | null; error: PostgrestError | null }>,
+  runtime: ReturnType<typeof getSupabaseAdminRuntimeInfo>,
 ): Promise<number> {
   const exactCountResponse = await fetchExactCount();
   if (!exactCountResponse.error) {
@@ -69,7 +56,7 @@ async function countRowsWithFallback(
   while (true) {
     const to = from + pageSize - 1;
     const pageResponse = await fetchPage(from, to);
-    throwIfSupabaseError(context, pageResponse.error);
+    throwIfSupabaseError(context, pageResponse.error, runtime);
 
     const rows = pageResponse.data ?? [];
     total += rows.length;
@@ -84,53 +71,13 @@ async function countRowsWithFallback(
   return total;
 }
 
-async function computeFounderMetricsWithPrisma(startOfToday: Date, endOfToday: Date): Promise<FounderMetricsData> {
-  const prisma = getPrismaServerClient();
-
-  const [totalLeads, closedLeads, scheduledVisits, completedVisits, followUpsDueToday, avgScoreResult] = await Promise.all([
-    prisma.lead.count(),
-    prisma.lead.count({ where: { stage: "closed" } }),
-    prisma.siteVisit.count({ where: { status: "scheduled" } }),
-    prisma.siteVisit.count({ where: { status: "completed" } }),
-    prisma.followUp.count({
-      where: {
-        status: "pending",
-        dueAt: {
-          gte: startOfToday,
-          lt: endOfToday,
-        },
-      },
-    }),
-    prisma.lead.aggregate({
-      _avg: {
-        score: true,
-      },
-    }),
-  ]);
-
-  const stageCounts = await Promise.all(LEAD_STAGES.map((stage) => prisma.lead.count({ where: { stage } })));
-  const stageBreakdown = Object.fromEntries(LEAD_STAGES.map((stage, index) => [stage, stageCounts[index] ?? 0]));
-
-  const interestCounts = await Promise.all(
-    INTEREST_LABELS.map((interestLabel) => prisma.lead.count({ where: { interestLabel } })),
-  );
-  const interestBreakdown = Object.fromEntries(INTEREST_LABELS.map((label, index) => [label, interestCounts[index] ?? 0]));
-
-  const avgScore = avgScoreResult._avg.score !== null ? Number(avgScoreResult._avg.score.toFixed(2)) : 0;
-  const conversionRate = totalLeads > 0 ? Number(((closedLeads / totalLeads) * 100).toFixed(2)) : 0;
-
-  return {
-    totalLeads,
-    avgScore,
-    conversionRate,
-    stageBreakdown,
-    interestBreakdown,
-    visits: {
-      scheduled: scheduledVisits,
-      completed: completedVisits,
-    },
-    followUpsDueToday,
-  };
+function runtimeInfoForLogs(): ReturnType<typeof getSupabaseAdminRuntimeInfo> | { unavailable: true; reason: string } {
+  try {
+    return getSupabaseAdminRuntimeInfo();
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Unknown runtime info error";
+    return { unavailable: true, reason };
+  }
 }
 
 export async function GET(): Promise<NextResponse> {
@@ -141,30 +88,35 @@ export async function GET(): Promise<NextResponse> {
   endOfToday.setDate(endOfToday.getDate() + 1);
 
   try {
-    const supabase = getSupabaseServerClient();
+    const runtime = getSupabaseAdminRuntimeInfo();
+    const supabase = getSupabaseAdminClient({ context: "founder-metrics" });
     const accessCheck = await supabase.from("leads").select("id").limit(1);
-    throwIfSupabaseError("Unable to access dashboard tables", accessCheck.error);
+    throwIfSupabaseError("Unable to access dashboard tables", accessCheck.error, runtime);
 
     const [totalLeads, closedLeads, scheduledVisits, completedVisits, followUpsDueToday] = await Promise.all([
       countRowsWithFallback(
         "Unable to count total leads",
         async () => await supabase.from("leads").select("id", { count: "exact", head: true }),
         async (from, to) => await supabase.from("leads").select("id").range(from, to),
+        runtime,
       ),
       countRowsWithFallback(
         "Unable to count closed leads",
         async () => await supabase.from("leads").select("id", { count: "exact", head: true }).eq("stage", "closed"),
         async (from, to) => await supabase.from("leads").select("id").eq("stage", "closed").range(from, to),
+        runtime,
       ),
       countRowsWithFallback(
         "Unable to count scheduled site visits",
         async () => await supabase.from("site_visits").select("id", { count: "exact", head: true }).eq("status", "scheduled"),
         async (from, to) => await supabase.from("site_visits").select("id").eq("status", "scheduled").range(from, to),
+        runtime,
       ),
       countRowsWithFallback(
         "Unable to count completed site visits",
         async () => await supabase.from("site_visits").select("id", { count: "exact", head: true }).eq("status", "completed"),
         async (from, to) => await supabase.from("site_visits").select("id").eq("status", "completed").range(from, to),
+        runtime,
       ),
       countRowsWithFallback(
         "Unable to count follow-ups due today",
@@ -183,6 +135,7 @@ export async function GET(): Promise<NextResponse> {
             .gte("due_at", startOfToday.toISOString())
             .lt("due_at", endOfToday.toISOString())
             .range(from, to),
+        runtime,
       ),
     ]);
 
@@ -192,6 +145,7 @@ export async function GET(): Promise<NextResponse> {
           `Unable to count leads in stage ${stage}`,
           async () => await supabase.from("leads").select("id", { count: "exact", head: true }).eq("stage", stage),
           async (from, to) => await supabase.from("leads").select("id").eq("stage", stage).range(from, to),
+          runtime,
         ),
       ),
     );
@@ -203,6 +157,7 @@ export async function GET(): Promise<NextResponse> {
           `Unable to count leads with interest label ${label}`,
           async () => await supabase.from("leads").select("id", { count: "exact", head: true }).eq("interest_label", label),
           async (from, to) => await supabase.from("leads").select("id").eq("interest_label", label).range(from, to),
+          runtime,
         ),
       ),
     );
@@ -234,16 +189,10 @@ export async function GET(): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    if (shouldFallbackToPrisma(error)) {
-      try {
-        const data = await computeFounderMetricsWithPrisma(startOfToday, endOfToday);
-        return NextResponse.json({ ok: true, data });
-      } catch (fallbackError) {
-        console.error("founder-metrics Prisma fallback failed", fallbackError);
-      }
-    }
-
-    console.error("founder-metrics failed; returning degraded response", error);
+    console.error("founder-metrics failed; returning degraded response", {
+      runtime: runtimeInfoForLogs(),
+      error,
+    });
     return fallbackMetrics("metrics_unavailable");
   }
 }
