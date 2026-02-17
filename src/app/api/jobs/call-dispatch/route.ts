@@ -6,8 +6,9 @@ import { getSupabaseAdminClient, getSupabaseAdminRuntimeInfo, throwIfSupabaseErr
 import { Json } from "@/lib/supabase-types";
 
 const ACTIVE_LEAD_STAGES = ["new", "contacted", "visit_scheduled"] as const;
-const CALL_BATCH_SIZE = 20;
-const SEED_CANDIDATE_SCAN_LIMIT = CALL_BATCH_SIZE * 20;
+const DISPATCH_BATCH_SIZE = 1;
+const FOLLOW_UP_SEED_BATCH_SIZE = 1;
+const SEED_CANDIDATE_SCAN_LIMIT = 400;
 let hasValidatedDispatchDbAccess = false;
 let hasLoggedDispatchRuntimeInfo = false;
 
@@ -137,7 +138,7 @@ async function seedFollowUpsForUncalledLeads(
 
   const followUpRows = (existingFollowUpsResponse.data ?? []) as FollowUpLeadIdRow[];
   const hasFollowUp = new Set(followUpRows.map((row) => row.lead_id));
-  const leadsToSeed = leads.filter((lead) => !hasFollowUp.has(lead.id)).slice(0, CALL_BATCH_SIZE);
+  const leadsToSeed = leads.filter((lead) => !hasFollowUp.has(lead.id)).slice(0, FOLLOW_UP_SEED_BATCH_SIZE);
 
   if (leadsToSeed.length === 0) return 0;
 
@@ -195,9 +196,10 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
       .from("follow_ups")
       .select("id,lead_id,due_at,status")
       .eq("status", "pending")
+      .eq("channel", "voice_call")
       .lte("due_at", nowIso)
       .order("due_at", { ascending: true })
-      .limit(CALL_BATCH_SIZE);
+      .limit(DISPATCH_BATCH_SIZE);
 
     throwIfSupabaseError("Unable to load due follow-ups", dueFollowUpsResponse.error, runtime);
 
