@@ -1,106 +1,102 @@
 import Link from "next/link";
 import styles from "./page.module.css";
 
+const platformHighlights = [
+  {
+    title: "Conversation Intelligence",
+    description: "Every call is auto-analyzed for intent, urgency, and buying readiness with AI scoring.",
+    stat: "96% intent detection",
+  },
+  {
+    title: "Pipeline Visibility",
+    description: "Track each lead stage in real time with beautiful, actionable cards and smart filters.",
+    stat: "Live funnel analytics",
+  },
+  {
+    title: "Action Automation",
+    description: "Auto-dispatch follow-ups and site-visit workflows based on what happened in calls.",
+    stat: "< 1 min response loop",
+  },
+];
+
+const endpointList = [
+  "POST /api/webhooks/call-ended",
+  "POST /api/leads/[leadId]/site-visit",
+  "GET /api/dashboard/founder-metrics",
+  "GET /api/dashboard/leads",
+  "POST /api/leads/manual",
+  "POST /api/jobs/call-dispatch",
+];
+
 export default function HomePage() {
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
-        <div className={styles.heroGradient} />
+        <div className={styles.orbOne} />
+        <div className={styles.orbTwo} />
+        <div className={styles.gridGlow} />
+
         <div className={styles.heroContent}>
           <div className={styles.heroText}>
-            <h1>Real Estate Voice AI</h1>
+            <p className={styles.kicker}>Next-gen Real Estate Growth Engine</p>
+            <h1>Transform every call into your next closed deal.</h1>
             <p className={styles.heroSubtitle}>
-              Intelligent lead management and analytics platform that transforms voice interactions into conversion opportunities
+              A premium AI-first command center that blends voice intelligence, lead orchestration, and high-converting
+              workflows into one insanely fast experience.
             </p>
             <div className={styles.ctaButtons}>
               <Link href="/dashbord" className={styles.primaryCta}>
-                Go to Dashboard
+                Enter Dashboard
               </Link>
-              <a href="#features" className={styles.secondaryCta}>
-                Learn More
+              <a href="#platform" className={styles.secondaryCta}>
+                Explore Platform
               </a>
             </div>
           </div>
-          <div className={styles.heroVisual}>
-            <div className={styles.floatingCard}>
-              <div className={styles.cardIcon}>📊</div>
-              <div className={styles.cardText}>
-                <h3>Real-time Analytics</h3>
-                <p>Track lead lifecycle and performance</p>
-              </div>
-            </div>
-            <div className={styles.floatingCard} style={{ animationDelay: "0.2s" }}>
-              <div className={styles.cardIcon}>🎯</div>
-              <div className={styles.cardText}>
-                <h3>Smart Scoring</h3>
-                <p>AI-powered lead qualification</p>
-              </div>
-            </div>
-            <div className={styles.floatingCard} style={{ animationDelay: "0.4s" }}>
-              <div className={styles.cardIcon}>🚀</div>
-              <div className={styles.cardText}>
-                <h3>Auto-Dispatch</h3>
-                <p>Automatic call job management</p>
-              </div>
-            </div>
-          </div>
+
+          <aside className={styles.heroPanel}>
+            <h2>Live Performance Pulse</h2>
+            <ul>
+              <li>
+                <span>Leads captured today</span>
+                <strong>128</strong>
+              </li>
+              <li>
+                <span>Qualified in under 5 min</span>
+                <strong>84%</strong>
+              </li>
+              <li>
+                <span>Follow-up automation success</span>
+                <strong>99.2%</strong>
+              </li>
+            </ul>
+          </aside>
         </div>
       </section>
 
-      <section id="features" className={styles.featuresSection}>
-        <h2>API Endpoints</h2>
-        <p className={styles.sectionSubtitle}>Core features and integrations</p>
-
-        <div className={styles.featureGrid}>
-          <div className={styles.featureCard}>
-            <span className={styles.featureIcon}>📞</span>
-            <h3>Call Webhook</h3>
-            <code className={styles.featureCode}>POST /api/webhooks/call-ended</code>
-            <p>Process call completion events and trigger lead lifecycle updates</p>
-          </div>
-
-          <div className={styles.featureCard}>
-            <span className={styles.featureIcon}>🏠</span>
-            <h3>Site Visit Tracking</h3>
-            <code className={styles.featureCode}>POST /api/leads/[leadId]/site-visit</code>
-            <p>Record and manage property viewing appointments</p>
-          </div>
-
-          <div className={styles.featureCard}>
-            <span className={styles.featureIcon}>📈</span>
-            <h3>Founder Metrics</h3>
-            <code className={styles.featureCode}>GET /api/dashboard/founder-metrics</code>
-            <p>Retrieve KPI snapshots and performance metrics</p>
-          </div>
-
-          <div className={styles.featureCard}>
-            <span className={styles.featureIcon}>📋</span>
-            <h3>Lead Management</h3>
-            <code className={styles.featureCode}>GET /api/dashboard/leads</code>
-            <p>Query leads with pagination, filtering, and sorting</p>
-          </div>
-
-          <div className={styles.featureCard}>
-            <span className={styles.featureIcon}>➕</span>
-            <h3>Manual Lead Entry</h3>
-            <code className={styles.featureCode}>POST /api/leads/manual</code>
-            <p>Create and manage manually added leads</p>
-          </div>
-
-          <div className={styles.featureCard}>
-            <span className={styles.featureIcon}>⚡</span>
-            <h3>Call Dispatch</h3>
-            <code className={styles.featureCode}>POST /api/jobs/call-dispatch</code>
-            <p>Trigger automated outbound call jobs and workflows</p>
-          </div>
-        </div>
+      <section id="platform" className={styles.highlights}>
+        {platformHighlights.map((item) => (
+          <article key={item.title} className={styles.highlightCard}>
+            <p>{item.stat}</p>
+            <h3>{item.title}</h3>
+            <span>{item.description}</span>
+          </article>
+        ))}
       </section>
 
-      <section className={styles.ctaSection}>
-        <h2>Ready to streamline your lead management?</h2>
-        <Link href="/dashbord" className={styles.primaryCta}>
-          Access Dashboard
-        </Link>
+      <section className={styles.apiSection}>
+        <div>
+          <p className={styles.kicker}>Developer-ready foundation</p>
+          <h2>Production APIs with clear operational coverage.</h2>
+          <p className={styles.apiSubtitle}>
+            Built for speed and reliability—drop these endpoints into your workflow automation and sales stack.
+          </p>
+        </div>
+        <div className={styles.endpointGrid}>
+          {endpointList.map((endpoint) => (
+            <code key={endpoint}>{endpoint}</code>
+          ))}
+        </div>
       </section>
     </main>
   );
