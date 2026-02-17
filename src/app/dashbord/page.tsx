@@ -86,6 +86,7 @@ export default function DashbordPage() {
   const [manualLeadLoading, setManualLeadLoading] = useState(false);
   const [manualLeadError, setManualLeadError] = useState<string | null>(null);
   const [manualLeadSuccess, setManualLeadSuccess] = useState<string | null>(null);
+  const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -274,6 +275,33 @@ export default function DashbordPage() {
       setManualLeadLoading(false);
     }
   }
+  async function handleDeleteLead(leadId: string) {
+    const shouldDelete = window.confirm("Delete this lead permanently? This action cannot be undone.");
+    if (!shouldDelete) return;
+
+    setDeletingLeadId(leadId);
+    setManualLeadError(null);
+    setManualLeadSuccess(null);
+
+    try {
+      const response = await fetch(`/api/dashboard/leads/${leadId}`, {
+        method: "DELETE",
+      });
+
+      const json = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !json.ok) {
+        throw new Error(json.error ?? "Unable to delete lead");
+      }
+
+      setManualLeadSuccess("Lead deleted successfully.");
+      setRefreshTick((value) => value + 1);
+    } catch (deleteError) {
+      setManualLeadError(deleteError instanceof Error ? deleteError.message : "Unable to delete lead");
+    } finally {
+      setDeletingLeadId(null);
+    }
+  }
+
 
   return (
     <main className={styles.page}>
@@ -532,12 +560,13 @@ export default function DashbordPage() {
                     <th>Interest</th>
                     <th>Score</th>
                     <th>Created</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredLeads.length === 0 && (
                     <tr>
-                      <td colSpan={7} className={styles.emptyRow}>
+                      <td colSpan={8} className={styles.emptyRow}>
                         No leads found for current filters.
                       </td>
                     </tr>
@@ -553,6 +582,18 @@ export default function DashbordPage() {
                       <td>{lead.interestLabel ? formatLabel(lead.interestLabel) : "-"}</td>
                       <td>{lead.score ?? "-"}</td>
                       <td>{new Date(lead.createdAt).toLocaleString()}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className={styles.deleteButton}
+                          onClick={() => {
+                            void handleDeleteLead(lead.id);
+                          }}
+                          disabled={deletingLeadId === lead.id}
+                        >
+                          {deletingLeadId === lead.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

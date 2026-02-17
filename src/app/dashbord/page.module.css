@@ -602,6 +602,26 @@
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
 }
 
+
+.deleteButton {
+  border: 1px solid color-mix(in srgb, var(--danger-color) 55%, var(--border-color));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger-color) 12%, var(--card-bg));
+  color: var(--danger-color);
+  padding: 8px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger-color) 18%, var(--card-bg));
+}
+
+.deleteButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .emptyRow {
   text-align: center !important;
   color: var(--muted-text);
