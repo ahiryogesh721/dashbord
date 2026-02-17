@@ -305,13 +305,6 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
         const leadUpdateResponse = await supabase
           .from("leads")
           .update({
-            stage: (lead.stage === "new" ? "contacted" : lead.stage) as
-              | "new"
-              | "contacted"
-              | "visit_scheduled"
-              | "visit_done"
-              | "closed"
-              | "lost",
             raw_payload: payloadUpdate,
           })
           .eq("id", lead.id);

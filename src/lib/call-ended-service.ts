@@ -3,8 +3,8 @@ import type { PostgrestError } from "@supabase/supabase-js";
 
 import { InterestLabel, LeadStage } from "@/lib/domain";
 import { consolidateDuplicateLeadsByPhone } from "@/lib/lead-dedupe";
-import { buildFollowUpMessage, followUpDueAt, initialLeadStage } from "@/lib/lifecycle";
-import { normalizeCallEndedPayload } from "@/lib/call-ended-payload";
+import { buildFollowUpMessage, followUpDueAt } from "@/lib/lifecycle";
+import { CallEndedPayload, normalizeCallEndedPayload } from "@/lib/call-ended-payload";
 import { normalizeCustomerNameToEnglish, normalizeGoalToEnglish, normalizeVisitSchedule } from "@/lib/call-ended-normalization";
 import { scoreLead } from "@/lib/lead-scoring";
 import { containsHindi, translateHindiToEnglish } from "@/lib/myHelpers";
@@ -22,6 +22,117 @@ function parseCallDate(value: string | Date | null | undefined): string | null {
 function nullableText(value: string | null | undefined): string | null {
   const cleaned = value?.trim();
   return cleaned ? cleaned : null;
+}
+
+const CONNECTED_HINT_KEYWORDS = [
+  "answered",
+  "connected",
+  "completed",
+  "in progress",
+  "human",
+  "talk",
+  "conversation",
+];
+
+const NOT_CONNECTED_HINT_KEYWORDS = [
+  "rejected",
+  "declined",
+  "no answer",
+  "not answered",
+  "unanswered",
+  "missed",
+  "busy",
+  "failed",
+  "voicemail",
+  "canceled",
+  "cancelled",
+  "not connected",
+  "unreachable",
+];
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function normalizeHint(value: string | null): string | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  return normalized || null;
+}
+
+function readStringHint(source: Record<string, unknown> | null, key: string): string | null {
+  if (!source) return null;
+  const value = source[key];
+  return typeof value === "string" ? normalizeHint(value) : null;
+}
+
+function readBooleanHint(source: Record<string, unknown> | null, key: string): boolean | null {
+  if (!source) return null;
+  const value = source[key];
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value > 0;
+  if (typeof value !== "string") return null;
+
+  const normalized = value.trim().toLowerCase();
+  if (["true", "1", "yes", "y", "answered", "connected"].includes(normalized)) return true;
+  if (["false", "0", "no", "n", "rejected", "declined", "no answer", "no_answer", "missed", "busy"].includes(normalized)) {
+    return false;
+  }
+
+  return null;
+}
+
+function includesAnyHint(hints: string[], keywords: string[]): boolean {
+  return hints.some((hint) => keywords.some((keyword) => hint.includes(keyword)));
+}
+
+function stageFromCallOutcome(payload: CallEndedPayload): LeadStage {
+  const payloadRecord = asRecord(payload);
+  const reportRecord = asRecord(payload.call_report);
+
+  const hintKeys = [
+    "status",
+    "call_status",
+    "callStatus",
+    "call_result",
+    "result",
+    "outcome",
+    "disposition",
+    "end_reason",
+    "hangup_reason",
+    "termination_reason",
+  ];
+
+  const hints: string[] = [];
+  for (const key of hintKeys) {
+    const payloadHint = readStringHint(payloadRecord, key);
+    if (payloadHint) hints.push(payloadHint);
+
+    const reportHint = readStringHint(reportRecord, key);
+    if (reportHint) hints.push(reportHint);
+  }
+
+  const answeredHint =
+    readBooleanHint(payloadRecord, "answered") ??
+    readBooleanHint(payloadRecord, "is_answered") ??
+    readBooleanHint(reportRecord, "answered") ??
+    readBooleanHint(reportRecord, "is_answered");
+
+  const hasConnectedHint = includesAnyHint(hints, CONNECTED_HINT_KEYWORDS);
+  const hasNotConnectedHint = includesAnyHint(hints, NOT_CONNECTED_HINT_KEYWORDS);
+
+  const durationSeconds = typeof payload.call_duration === "number" ? payload.call_duration : null;
+  const hasConversationText = Boolean(nullableText(payload.call_report?.transcript) || nullableText(payload.call_report?.summary));
+
+  if (answeredHint === true || hasConnectedHint || hasConversationText || (durationSeconds !== null && durationSeconds > 0)) {
+    return "contacted";
+  }
+
+  if (answeredHint === false || hasNotConnectedHint || durationSeconds === 0) {
+    return "closed";
+  }
+
+  return "closed";
 }
 
 async function toEnglishOnlyText({
@@ -122,7 +233,7 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
     duration: payload.call_duration,
   });
 
-  const stage = initialLeadStage(visitSchedule.visitDateTime);
+  const stage = stageFromCallOutcome(payload);
   const dueAt = followUpDueAt({
     interestLabel: scoreResult.interestLabel,
     stage,
