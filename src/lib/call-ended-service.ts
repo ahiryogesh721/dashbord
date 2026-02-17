@@ -247,7 +247,6 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
   const leadPayload = {
     updated_at: nowIso,
     call_date: parseCallDate(payload.call_date),
-    customer_name: customerName,
     phone: normalizedPhone,
     goal,
     preference: nullableText(extracted.layout_preference),
@@ -261,6 +260,10 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
     ai_reason: scoreResult.reason,
     stage,
     raw_payload: rawPayload,
+  };
+  const insertLeadPayload = {
+    ...leadPayload,
+    customer_name: customerName,
   };
 
   const existingLeadId = await consolidateDuplicateLeadsByPhone(supabase, normalizedPhone, "call-ended");
@@ -276,7 +279,7 @@ export async function processCallEndedEvent(input: unknown): Promise<ProcessedCa
         id: leadInsertId,
         created_at: nowIso,
         source: "voice_ai",
-        ...leadPayload,
+        ...insertLeadPayload,
       })
       .select("id,score,interest_label,stage,customer_name")
       .single();
