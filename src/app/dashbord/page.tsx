@@ -45,8 +45,6 @@ type ManualLeadFormState = {
   countryCode: string;
   phone: string;
   source: string;
-  goal: string;
-  preference: string;
   interest_label: string;
 };
 
@@ -59,8 +57,6 @@ const INITIAL_FORM: ManualLeadFormState = {
   countryCode: "+91",
   phone: "",
   source: "manual",
-  goal: "",
-  preference: "",
   interest_label: "",
 };
 
@@ -228,14 +224,6 @@ export default function DashbordPage() {
       fieldErrors.source = "Source is required.";
     }
 
-    if (!form.goal.trim()) {
-      fieldErrors.goal = "Goal is required.";
-    }
-
-    if (!form.preference.trim()) {
-      fieldErrors.preference = "Preference is required.";
-    }
-
     if (!form.interest_label.trim()) {
       fieldErrors.interest_label = "Please select interest level.";
     }
@@ -268,8 +256,6 @@ export default function DashbordPage() {
           customer_name: manualLeadForm.customer_name.trim(),
           phone: `${manualLeadForm.countryCode}${manualLeadForm.phone.replace(/\D/g, "")}`,
           source: manualLeadForm.source.trim(),
-          goal: manualLeadForm.goal.trim(),
-          preference: manualLeadForm.preference.trim(),
           interest_label: manualLeadForm.interest_label,
         }),
       });
@@ -418,28 +404,6 @@ export default function DashbordPage() {
                   className={manualLeadFieldErrors.source ? styles.inputError : ""}
                 />
                 {manualLeadFieldErrors.source && <span className={styles.fieldError}>{manualLeadFieldErrors.source}</span>}
-              </label>
-
-              <label>
-                Goal
-                <input
-                  value={manualLeadForm.goal}
-                  onChange={(event) => setManualLeadForm((state) => ({ ...state, goal: event.target.value }))}
-                  placeholder="Need 3BHK in Gurugram"
-                  className={manualLeadFieldErrors.goal ? styles.inputError : ""}
-                />
-                {manualLeadFieldErrors.goal && <span className={styles.fieldError}>{manualLeadFieldErrors.goal}</span>}
-              </label>
-
-              <label>
-                Preference
-                <input
-                  value={manualLeadForm.preference}
-                  onChange={(event) => setManualLeadForm((state) => ({ ...state, preference: event.target.value }))}
-                  placeholder="Budget / location / timeline"
-                  className={manualLeadFieldErrors.preference ? styles.inputError : ""}
-                />
-                {manualLeadFieldErrors.preference && <span className={styles.fieldError}>{manualLeadFieldErrors.preference}</span>}
               </label>
 
               <label>

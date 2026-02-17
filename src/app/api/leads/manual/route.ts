@@ -19,6 +19,8 @@ const createLeadSchema = z.object({
   interest_label: z.enum(INTEREST_LABELS).optional().nullable(),
 });
 
+type CreateLeadInput = z.infer<typeof createLeadSchema>;
+
 type InsertedLeadRow = {
   id: string;
   created_at: string;
@@ -40,6 +42,51 @@ type DispatchTriggerResult = {
 
 function isUniqueViolation(error: PostgrestError | null): boolean {
   return error?.code === "23505";
+}
+
+function buildManualLeadUpdatePayload(input: CreateLeadInput, nowIso: string): {
+  updated_at: string;
+  customer_name: string;
+  source: string;
+  interest_label: CreateLeadInput["interest_label"] | null;
+  raw_payload: {
+    created_via: "manual_dashboard_form";
+    submitted_at: string;
+  };
+  goal?: string | null;
+  preference?: string | null;
+} {
+  const payload: {
+    updated_at: string;
+    customer_name: string;
+    source: string;
+    interest_label: CreateLeadInput["interest_label"] | null;
+    raw_payload: {
+      created_via: "manual_dashboard_form";
+      submitted_at: string;
+    };
+    goal?: string | null;
+    preference?: string | null;
+  } = {
+    updated_at: nowIso,
+    customer_name: input.customer_name,
+    source: input.source,
+    interest_label: input.interest_label ?? null,
+    raw_payload: {
+      created_via: "manual_dashboard_form",
+      submitted_at: nowIso,
+    },
+  };
+
+  if (input.goal !== undefined) {
+    payload.goal = input.goal ?? null;
+  }
+
+  if (input.preference !== undefined) {
+    payload.preference = input.preference ?? null;
+  }
+
+  return payload;
 }
 
 async function triggerCallDispatch(request: Request): Promise<DispatchTriggerResult> {
@@ -168,18 +215,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (existingLeadId) {
       const updateResponse = await supabase
         .from("leads")
-        .update({
-          updated_at: nowIso,
-          customer_name: input.customer_name,
-          source: input.source,
-          goal: input.goal ?? null,
-          preference: input.preference ?? null,
-          interest_label: input.interest_label ?? null,
-          raw_payload: {
-            created_via: "manual_dashboard_form",
-            submitted_at: nowIso,
-          },
-        })
+        .update(buildManualLeadUpdatePayload(input, nowIso))
         .eq("id", existingLeadId)
         .select("id,created_at,customer_name,phone,source,stage,interest_label,goal,preference")
         .single();
@@ -217,18 +253,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
       const recoverUpdateResponse = await supabase
         .from("leads")
-        .update({
-          updated_at: nowIso,
-          customer_name: input.customer_name,
-          source: input.source,
-          goal: input.goal ?? null,
-          preference: input.preference ?? null,
-          interest_label: input.interest_label ?? null,
-          raw_payload: {
-            created_via: "manual_dashboard_form",
-            submitted_at: nowIso,
-          },
-        })
+        .update(buildManualLeadUpdatePayload(input, nowIso))
         .eq("id", recoveredLeadId)
         .select("id,created_at,customer_name,phone,source,stage,interest_label,goal,preference")
         .single();
