@@ -44,8 +44,6 @@ type ManualLeadFormState = {
   customer_name: string;
   countryCode: string;
   phone: string;
-  source: string;
-  interest_label: string;
 };
 
 type ManualLeadFieldErrors = Partial<Record<keyof ManualLeadFormState, string>>;
@@ -56,8 +54,6 @@ const INITIAL_FORM: ManualLeadFormState = {
   customer_name: "",
   countryCode: "+91",
   phone: "",
-  source: "manual",
-  interest_label: "",
 };
 
 const COUNTRY_OPTIONS = [
@@ -220,14 +216,6 @@ export default function DashbordPage() {
       fieldErrors.phone = "Selected country code + phone must be between 7 and 15 digits.";
     }
 
-    if (!form.source.trim()) {
-      fieldErrors.source = "Source is required.";
-    }
-
-    if (!form.interest_label.trim()) {
-      fieldErrors.interest_label = "Please select interest level.";
-    }
-
     return fieldErrors;
   }
 
@@ -255,8 +243,6 @@ export default function DashbordPage() {
         body: JSON.stringify({
           customer_name: manualLeadForm.customer_name.trim(),
           phone: `${manualLeadForm.countryCode}${manualLeadForm.phone.replace(/\D/g, "")}`,
-          source: manualLeadForm.source.trim(),
-          interest_label: manualLeadForm.interest_label,
         }),
       });
 
@@ -393,34 +379,6 @@ export default function DashbordPage() {
                   />
                 </div>
                 {manualLeadFieldErrors.phone && <span className={styles.fieldError}>{manualLeadFieldErrors.phone}</span>}
-              </label>
-
-              <label>
-                Source
-                <input
-                  value={manualLeadForm.source}
-                  onChange={(event) => setManualLeadForm((state) => ({ ...state, source: event.target.value }))}
-                  placeholder="manual / website / meta_ads"
-                  className={manualLeadFieldErrors.source ? styles.inputError : ""}
-                />
-                {manualLeadFieldErrors.source && <span className={styles.fieldError}>{manualLeadFieldErrors.source}</span>}
-              </label>
-
-              <label>
-                Interest
-                <select
-                  value={manualLeadForm.interest_label}
-                  onChange={(event) => setManualLeadForm((state) => ({ ...state, interest_label: event.target.value }))}
-                  className={manualLeadFieldErrors.interest_label ? styles.inputError : ""}
-                >
-                  <option value="">Select interest</option>
-                  {INTEREST_LABELS.map((interest) => (
-                    <option key={interest} value={interest}>
-                      {formatLabel(interest)}
-                    </option>
-                  ))}
-                </select>
-                {manualLeadFieldErrors.interest_label && <span className={styles.fieldError}>{manualLeadFieldErrors.interest_label}</span>}
               </label>
 
               <button type="submit" className={styles.primaryButton} disabled={manualLeadLoading}>

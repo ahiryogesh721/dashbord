@@ -13,7 +13,7 @@ const createLeadSchema = z.object({
     .string()
     .trim()
     .regex(/^\+?[0-9]{7,15}$/, "Phone must contain 7-15 digits and may start with +"),
-  source: z.string().trim().min(2).max(80).default("manual"),
+  source: z.string().trim().min(2).max(80).optional(),
   goal: z.string().trim().max(250).optional().nullable(),
   preference: z.string().trim().max(250).optional().nullable(),
   interest_label: z.enum(INTEREST_LABELS).optional().nullable(),
@@ -47,36 +47,42 @@ function isUniqueViolation(error: PostgrestError | null): boolean {
 function buildManualLeadUpdatePayload(input: CreateLeadInput, nowIso: string): {
   updated_at: string;
   customer_name: string;
-  source: string;
-  interest_label: CreateLeadInput["interest_label"] | null;
   raw_payload: {
     created_via: "manual_dashboard_form";
     submitted_at: string;
   };
+  source?: string;
+  interest_label?: CreateLeadInput["interest_label"] | null;
   goal?: string | null;
   preference?: string | null;
 } {
   const payload: {
     updated_at: string;
     customer_name: string;
-    source: string;
-    interest_label: CreateLeadInput["interest_label"] | null;
     raw_payload: {
       created_via: "manual_dashboard_form";
       submitted_at: string;
     };
+    source?: string;
+    interest_label?: CreateLeadInput["interest_label"] | null;
     goal?: string | null;
     preference?: string | null;
   } = {
     updated_at: nowIso,
     customer_name: input.customer_name,
-    source: input.source,
-    interest_label: input.interest_label ?? null,
     raw_payload: {
       created_via: "manual_dashboard_form",
       submitted_at: nowIso,
     },
   };
+
+  if (input.source !== undefined) {
+    payload.source = input.source;
+  }
+
+  if (input.interest_label !== undefined) {
+    payload.interest_label = input.interest_label ?? null;
+  }
 
   if (input.goal !== undefined) {
     payload.goal = input.goal ?? null;
@@ -232,7 +238,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         updated_at: nowIso,
         customer_name: input.customer_name,
         phone: cleanedPhone,
-        source: input.source,
+        source: input.source ?? "manual",
         goal: input.goal ?? null,
         preference: input.preference ?? null,
         interest_label: input.interest_label ?? null,
