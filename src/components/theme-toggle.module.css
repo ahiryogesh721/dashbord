@@ -1,19 +1,28 @@
 .toggle {
-  border: 2px solid var(--border-color);
-  background: linear-gradient(135deg, var(--card-soft-bg), var(--card-bg));
+  border: 1px solid var(--border-color);
+  background: linear-gradient(135deg, var(--card-bg), color-mix(in srgb, var(--card-soft-bg) 70%, var(--card-bg)));
   color: var(--text-color);
   border-radius: 999px;
-  padding: 10px 16px;
+  padding: 8px 14px;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 0.95rem;
-  letter-spacing: 0.01em;
+  transition: all 0.2s ease;
+  font-size: 0.88rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--accent-color) 14%, transparent);
 }
 
 .toggle:hover {
   border-color: var(--accent-color);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
-  background: linear-gradient(135deg, var(--card-bg), color-mix(in srgb, var(--accent-color) 8%, var(--card-bg)));
+  transform: translateY(-1px);
 }

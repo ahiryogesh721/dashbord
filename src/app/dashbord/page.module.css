@@ -1,6 +1,6 @@
 .page {
   max-width: 1400px;
-  margin: 32px auto 64px;
+  margin: 24px auto 64px;
   padding: 0 24px;
   color: var(--text-color);
   scroll-behavior: smooth;
@@ -10,14 +10,13 @@
   position: relative;
   overflow: hidden;
   border: 1px solid var(--border-color);
-  border-radius: 24px;
+  border-radius: 28px;
   padding: 48px;
-  background: linear-gradient(
-    135deg,
-    linear-gradient(135deg, var(--card-bg), color-mix(in srgb, var(--card-soft-bg) 50%, var(--card-bg))),
-    linear-gradient(135deg, color-mix(in srgb, var(--accent-color) 8%, var(--card-bg)), color-mix(in srgb, var(--secondary-color) 6%, var(--card-bg)))
-  );
-  box-shadow: 0 24px 64px rgba(124, 58, 237, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  background:
+    radial-gradient(circle at 12% 12%, color-mix(in srgb, var(--accent-color) 24%, transparent), transparent 45%),
+    radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--secondary-color) 20%, transparent), transparent 40%),
+    linear-gradient(135deg, var(--card-bg), color-mix(in srgb, var(--card-soft-bg) 70%, var(--card-bg)));
+  box-shadow: 0 24px 70px rgba(8, 12, 25, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
   animation: fadeInDown 0.6s ease-out;
 }
 
@@ -151,7 +150,7 @@
 }
 
 .kpiCard {
-  border-radius: 18px;
+  border-radius: 22px;
   border: 1px solid var(--border-color);
   background: linear-gradient(135deg, var(--card-bg), color-mix(in srgb, var(--card-soft-bg) 50%, var(--card-bg)));
   padding: 24px 20px;
@@ -238,7 +237,7 @@
 .card,
 .tableSection {
   border: 1px solid var(--border-color);
-  border-radius: 20px;
+  border-radius: 22px;
   background: linear-gradient(135deg, var(--card-bg), color-mix(in srgb, var(--card-soft-bg) 40%, var(--card-bg)));
   padding: 28px;
   box-shadow: 0 12px 40px rgba(124, 58, 237, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.1);

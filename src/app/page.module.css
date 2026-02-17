@@ -1,294 +1,230 @@
 .page {
-  position: relative;
+  max-width: 1320px;
+  margin: 28px auto 64px;
+  padding: 0 24px;
 }
 
 .hero {
   position: relative;
   overflow: hidden;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 120px 24px 80px;
+  border: 1px solid var(--border-color);
+  border-radius: 30px;
+  padding: 72px 48px;
+  background:
+    radial-gradient(circle at 10% 10%, color-mix(in srgb, var(--accent-color) 30%, transparent), transparent 55%),
+    radial-gradient(circle at 90% 20%, color-mix(in srgb, var(--secondary-color) 25%, transparent), transparent 45%),
+    linear-gradient(135deg, var(--card-bg), color-mix(in srgb, var(--card-soft-bg) 65%, var(--card-bg)));
+  box-shadow: 0 24px 70px rgba(10, 16, 36, 0.18);
 }
 
-.heroGradient {
+.orbOne,
+.orbTwo,
+.gridGlow {
   position: absolute;
-  top: -400px;
-  right: -200px;
-  width: 800px;
-  height: 800px;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--accent-color) 25%, transparent),
-    transparent
-  );
-  border-radius: 50%;
-  animation: float 8s ease-in-out infinite;
   pointer-events: none;
 }
 
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0px) translateX(0px);
-  }
-  50% {
-    transform: translateY(-30px) translateX(-30px);
-  }
+.orbOne {
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent-color) 26%, transparent);
+  top: -120px;
+  right: -70px;
+  filter: blur(8px);
+}
+
+.orbTwo {
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--secondary-color) 22%, transparent);
+  bottom: -90px;
+  left: -60px;
+}
+
+.gridGlow {
+  inset: 0;
+  background-image: linear-gradient(color-mix(in srgb, var(--border-color) 65%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--border-color) 65%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.9), transparent 80%);
+  opacity: 0.25;
 }
 
 .heroContent {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 64px;
-  align-items: center;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 32px;
+}
+
+.kicker {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--secondary-color);
 }
 
 .heroText h1 {
-  margin: 0 0 20px;
-  font-size: clamp(2.5rem, 2rem + 3vw, 4rem);
-  line-height: 1.2;
+  margin: 16px 0;
+  font-size: clamp(2rem, 1.6rem + 2.7vw, 3.9rem);
+  line-height: 1.1;
 }
 
 .heroSubtitle {
-  font-size: 1.2rem;
-  line-height: 1.7;
-  color: var(--muted-text);
-  margin-bottom: 32px;
+  font-size: 1.1rem;
+  max-width: 700px;
+  margin-bottom: 26px;
 }
 
 .ctaButtons {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
 .primaryCta,
 .secondaryCta {
-  display: inline-block;
-  padding: 14px 32px;
-  border-radius: 12px;
-  font-weight: 700;
   text-decoration: none;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  font-size: 1rem;
-  cursor: pointer;
-  border: 2px solid transparent;
-  letter-spacing: 0.01em;
+  font-weight: 700;
+  border-radius: 12px;
+  padding: 12px 22px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .primaryCta {
-  background: linear-gradient(135deg, var(--accent-color), var(--secondary-color));
+  background: linear-gradient(120deg, var(--accent-color), var(--secondary-color));
   color: #fff;
-  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.3);
-}
-
-.primaryCta:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 36px rgba(124, 58, 237, 0.4);
+  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.32);
 }
 
 .secondaryCta {
-  border: 2px solid var(--border-color);
-  color: var(--accent-color);
-  background: transparent;
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--card-soft-bg) 65%, var(--card-bg));
 }
 
+.primaryCta:hover,
 .secondaryCta:hover {
-  border-color: var(--accent-color);
-  background: color-mix(in srgb, var(--accent-color) 8%, transparent);
   transform: translateY(-2px);
 }
 
-.heroVisual {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  perspective: 1000px;
-}
-
-.floatingCard {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-  border-radius: 16px;
+.heroPanel {
+  border-radius: 20px;
   border: 1px solid var(--border-color);
-  background: linear-gradient(135deg, var(--card-bg), color-mix(in srgb, var(--card-soft-bg) 50%, var(--card-bg)));
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-  animation: slideUp 0.6s ease-out backwards;
-  transition: all 0.3s ease;
+  background: color-mix(in srgb, var(--card-bg) 80%, transparent);
+  backdrop-filter: blur(5px);
+  padding: 24px;
 }
 
-.floatingCard:hover {
-  border-color: var(--accent-color);
-  transform: translateY(-8px);
-  box-shadow: 0 12px 36px rgba(124, 58, 237, 0.15);
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(40px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.cardIcon {
-  font-size: 2.5rem;
-  flex-shrink: 0;
-}
-
-.cardText h3 {
-  margin: 0 0 4px;
-  font-size: 1.1rem;
-  color: var(--text-color);
-}
-
-.cardText p {
+.heroPanel h2 {
   margin: 0;
-  font-size: 0.9rem;
-  color: var(--muted-text);
+  font-size: 1.05rem;
 }
 
-.featuresSection {
-  position: relative;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 80px 24px;
-  border-top: 1px solid var(--border-color);
-}
-
-.featuresSection h2 {
-  text-align: center;
-  font-size: clamp(2rem, 1.5rem + 2vw, 3rem);
-  margin: 0 0 12px;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, var(--accent-color), var(--secondary-color));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.sectionSubtitle {
-  text-align: center;
-  color: var(--muted-text);
-  margin-bottom: 48px;
-  font-size: 1.1rem;
-}
-
-.featureGrid {
+.heroPanel ul {
+  margin-top: 16px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 24px;
-  margin-bottom: 40px;
+  gap: 12px;
 }
 
-.featureCard {
-  padding: 28px;
-  border-radius: 16px;
-  border: 1px solid var(--border-color);
-  background: linear-gradient(135deg, var(--card-bg), color-mix(in srgb, var(--card-soft-bg) 40%, var(--card-bg)));
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-}
-
-.featureCard::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-color) 8%, transparent), transparent);
-  transition: left 0.5s ease;
-  pointer-events: none;
-}
-
-.featureCard:hover {
-  border-color: var(--accent-color);
-  transform: translateY(-8px);
-  box-shadow: 0 16px 48px rgba(124, 58, 237, 0.12);
-}
-
-.featureCard:hover::before {
-  left: 100%;
-}
-
-.featureIcon {
-  display: block;
-  font-size: 2.8rem;
-  margin-bottom: 12px;
-}
-
-.featureCard h3 {
-  margin: 0 0 8px;
-  font-size: 1.3rem;
-  color: var(--text-color);
-  font-weight: 800;
-}
-
-.featureCode {
-  display: block;
+.heroPanel li {
   padding: 12px 14px;
-  background: var(--card-soft-bg);
+  border-radius: 12px;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin: 12px 0;
-  overflow-x: auto;
-  color: var(--accent-color);
-  word-break: break-word;
+  background: var(--card-bg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
 }
 
-.featureCard p {
-  margin: 0;
+.heroPanel span {
   color: var(--muted-text);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+}
+
+.heroPanel strong {
+  color: var(--accent-color);
+  font-size: 1rem;
+}
+
+.highlights {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.highlightCard {
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  background: var(--card-bg);
+  padding: 20px;
+}
+
+.highlightCard p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--secondary-color);
+  font-weight: 700;
+}
+
+.highlightCard h3 {
+  margin: 10px 0;
+}
+
+.highlightCard span {
+  color: var(--muted-text);
   line-height: 1.6;
 }
 
-.ctaSection {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 80px 24px;
-  text-align: center;
-  border-top: 1px solid var(--border-color);
+.apiSection {
+  margin-top: 24px;
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  background: linear-gradient(180deg, var(--card-bg), color-mix(in srgb, var(--card-soft-bg) 80%, var(--card-bg)));
+  padding: 30px;
 }
 
-.ctaSection h2 {
-  font-size: clamp(1.8rem, 1.5rem + 1.5vw, 2.8rem);
-  margin: 0 0 32px;
-  letter-spacing: -0.02em;
+.apiSection h2 {
+  margin: 10px 0;
+  font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2.2rem);
 }
 
-@media (max-width: 768px) {
+.apiSubtitle {
+  margin-bottom: 18px;
+}
+
+.endpointGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.endpointGrid code {
+  display: block;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 920px) {
+  .hero {
+    padding: 42px 24px;
+  }
+
   .heroContent {
     grid-template-columns: 1fr;
-    gap: 40px;
-    padding: 40px 0;
   }
 
-  .heroVisual {
-    order: -1;
-  }
-
-  .ctaButtons {
-    gap: 12px;
-  }
-
-  .primaryCta,
-  .secondaryCta {
-    flex: 1;
-    text-align: center;
-  }
-
-  .featureGrid {
+  .highlights {
     grid-template-columns: 1fr;
   }
 }

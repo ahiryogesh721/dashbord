@@ -24,7 +24,7 @@ export default function RootLayout({
             </Link>
             <nav className="topnav">
               <Link href="/">Home</Link>
-              <Link href="/dashbord">Dashbord</Link>
+              <Link href="/dashbord">Dashboard</Link>
             </nav>
             <ThemeToggle />
           </div>
