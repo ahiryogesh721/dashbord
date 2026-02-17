@@ -274,12 +274,23 @@ export default function DashbordPage() {
         }),
       });
 
-      const json = (await response.json()) as { ok: boolean; error?: string };
+      const json = (await response.json()) as {
+        ok: boolean;
+        error?: string;
+        dispatch?: {
+          ok: boolean;
+          error: string | null;
+        };
+      };
       if (!response.ok || !json.ok) {
         throw new Error(json.error ?? "Unable to add manual lead");
       }
 
-      setManualLeadSuccess("Lead created successfully.");
+      const successMessage = json.dispatch?.ok
+        ? "Lead created successfully and dispatch triggered."
+        : `Lead created successfully, but dispatch trigger failed${json.dispatch?.error ? `: ${json.dispatch.error}` : "."}`;
+
+      setManualLeadSuccess(successMessage);
       setManualLeadFieldErrors({});
       setManualLeadForm(INITIAL_FORM);
       setShowManualForm(false);

@@ -31,8 +31,97 @@ type InsertedLeadRow = {
   preference: string | null;
 };
 
+type DispatchTriggerResult = {
+  attempted: boolean;
+  ok: boolean;
+  status: number | null;
+  error: string | null;
+};
+
 function isUniqueViolation(error: PostgrestError | null): boolean {
   return error?.code === "23505";
+}
+
+async function triggerCallDispatch(request: Request): Promise<DispatchTriggerResult> {
+  const secret = process.env.N8N_DISPATCH_SECRET ?? process.env.CRON_JOB_SECRET;
+  const normalizedSecret = secret?.trim();
+
+  const headers: HeadersInit = {};
+  if (normalizedSecret) {
+    headers["x-n8n-secret"] = normalizedSecret;
+  }
+
+  try {
+    const response = await fetch(new URL("/api/jobs/call-dispatch", request.url), {
+      method: "POST",
+      headers,
+      cache: "no-store",
+    });
+
+    const text = await response.text();
+    const parsed = text ? tryParseJson(text) : null;
+    const parsedError =
+      parsed && typeof parsed === "object" && "error" in parsed && typeof parsed.error === "string" ? parsed.error : null;
+
+    if (!response.ok) {
+      return {
+        attempted: true,
+        ok: false,
+        status: response.status,
+        error: parsedError ?? `Dispatch trigger failed with status ${response.status}`,
+      };
+    }
+
+    const parsedOk = parsed && typeof parsed === "object" && "ok" in parsed ? Boolean(parsed.ok) : true;
+    if (!parsedOk) {
+      return {
+        attempted: true,
+        ok: false,
+        status: response.status,
+        error: parsedError ?? "Dispatch trigger returned ok=false",
+      };
+    }
+
+    return {
+      attempted: true,
+      ok: true,
+      status: response.status,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      attempted: true,
+      ok: false,
+      status: null,
+      error: error instanceof Error ? error.message : "Dispatch trigger request failed",
+    };
+  }
+}
+
+function tryParseJson(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+async function successResponse(request: Request, data: InsertedLeadRow, status: number): Promise<NextResponse> {
+  const dispatch = await triggerCallDispatch(request);
+  if (!dispatch.ok) {
+    console.error("manual lead dispatch trigger failed", {
+      dispatch,
+    });
+  }
+
+  return NextResponse.json(
+    {
+      ok: true,
+      data,
+      dispatch,
+    },
+    { status },
+  );
 }
 
 function errorResponse(error: unknown): NextResponse {
@@ -96,7 +185,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         .single();
 
       throwIfSupabaseError("Unable to update existing manual lead", updateResponse.error, runtime);
-      return NextResponse.json({ ok: true, data: updateResponse.data as InsertedLeadRow }, { status: 200 });
+      return successResponse(request, updateResponse.data as InsertedLeadRow, 200);
     }
 
     const insertResponse = await supabase
@@ -145,11 +234,11 @@ export async function POST(request: Request): Promise<NextResponse> {
         .single();
 
       throwIfSupabaseError("Unable to recover and update manual lead", recoverUpdateResponse.error, runtime);
-      return NextResponse.json({ ok: true, data: recoverUpdateResponse.data as InsertedLeadRow }, { status: 200 });
+      return successResponse(request, recoverUpdateResponse.data as InsertedLeadRow, 200);
     }
 
     throwIfSupabaseError("Unable to create manual lead", insertResponse.error, runtime);
-    return NextResponse.json({ ok: true, data: insertResponse.data as InsertedLeadRow }, { status: 201 });
+    return successResponse(request, insertResponse.data as InsertedLeadRow, 201);
   } catch (error) {
     if (error instanceof SyntaxError) {
       return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
