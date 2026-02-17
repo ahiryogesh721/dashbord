@@ -276,9 +276,6 @@ export default function DashbordPage() {
     }
   }
   async function handleDeleteLead(leadId: string) {
-    const shouldDelete = window.confirm("Delete this lead permanently? This action cannot be undone.");
-    if (!shouldDelete) return;
-
     setDeletingLeadId(leadId);
     setManualLeadError(null);
     setManualLeadSuccess(null);
@@ -293,7 +290,6 @@ export default function DashbordPage() {
         throw new Error(json.error ?? "Unable to delete lead");
       }
 
-      setManualLeadSuccess("Lead deleted successfully.");
       setRefreshTick((value) => value + 1);
     } catch (deleteError) {
       setManualLeadError(deleteError instanceof Error ? deleteError.message : "Unable to delete lead");

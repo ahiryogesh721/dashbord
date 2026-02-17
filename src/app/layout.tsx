@@ -19,11 +19,10 @@ export default function RootLayout({
       <body>
         <header className="topbar">
           <div className="topbarInner">
-            <Link href="/" className="brand">
+            <Link href="/dashbord" className="brand">
               Real Estate CRM
             </Link>
             <nav className="topnav">
-              <Link href="/">Home</Link>
               <Link href="/dashbord">Dashboard</Link>
             </nav>
             <ThemeToggle />
