@@ -1,25 +1,31 @@
 :root {
   color-scheme: light;
-  --bg-color: #f6f8fc;
-  --text-color: #121b2f;
-  --muted-text: #52617f;
+  --bg-color: #f8f9ff;
+  --text-color: #0d1b3c;
+  --muted-text: #6b7a99;
   --card-bg: #ffffff;
-  --card-soft-bg: #f8faff;
-  --border-color: #dbe3f4;
-  --accent-color: #2859d6;
-  --danger-color: #b42318;
+  --card-soft-bg: #f3f6ff;
+  --border-color: #e2e8f7;
+  --accent-color: #7c3aed;
+  --secondary-color: #06b6d4;
+  --tertiary-color: #2563eb;
+  --danger-color: #ef4444;
+  --success-color: #10b981;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg-color: #0e1424;
-  --text-color: #ebf0ff;
-  --muted-text: #a7b4d1;
-  --card-bg: #161f34;
-  --card-soft-bg: #121a2d;
-  --border-color: #2b3857;
-  --accent-color: #6ea2ff;
-  --danger-color: #ff6b6b;
+  --bg-color: #0f1725;
+  --text-color: #f0f4ff;
+  --muted-text: #9ca3b5;
+  --card-bg: #1a2240;
+  --card-soft-bg: #141d30;
+  --border-color: #2d3a52;
+  --accent-color: #a78bfa;
+  --secondary-color: #22d3ee;
+  --tertiary-color: #60a5fa;
+  --danger-color: #f87171;
+  --success-color: #34d399;
 }
 
 * {
@@ -41,66 +47,126 @@ a {
   position: sticky;
   top: 0;
   z-index: 30;
-  backdrop-filter: blur(8px);
-  background: color-mix(in srgb, var(--bg-color) 90%, transparent);
+  backdrop-filter: blur(12px);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-color) 85%, transparent),
+    color-mix(in srgb, var(--bg-color) 70%, transparent)
+  );
   border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 2px 16px rgba(124, 58, 237, 0.08);
 }
 
 .topbarInner {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 12px 20px;
+  padding: 16px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 24px;
 }
 
 .brand {
-  font-weight: 800;
+  font-weight: 900;
   text-decoration: none;
   color: var(--text-color);
+  font-size: 1.35rem;
+  background: linear-gradient(135deg, var(--accent-color), var(--secondary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
 }
 
 .topnav {
   display: flex;
-  gap: 14px;
+  gap: 28px;
   margin-left: auto;
 }
 
 .topnav a {
   text-decoration: none;
   color: var(--muted-text);
-  font-weight: 600;
+  font-weight: 700;
+  position: relative;
+  transition: color 0.3s ease;
+  letter-spacing: 0.01em;
+}
+
+.topnav a::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-color), var(--secondary-color));
+  transition: width 0.3s ease;
+  border-radius: 999px;
 }
 
 .topnav a:hover {
   color: var(--accent-color);
 }
 
+.topnav a:hover::after {
+  width: 100%;
+}
+
 .container {
-  max-width: 900px;
-  margin: 48px auto;
-  padding: 0 20px;
+  max-width: 1100px;
+  margin: 64px auto;
+  padding: 0 24px;
 }
 
 h1 {
-  margin: 0 0 12px;
-  font-size: 2rem;
+  margin: 0 0 16px;
+  font-size: clamp(2.2rem, 2rem + 2vw, 3.5rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--accent-color), var(--secondary-color), var(--tertiary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 p {
-  margin: 0 0 20px;
+  margin: 0 0 24px;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--muted-text);
 }
 
 ul {
   margin: 0;
-  padding-left: 20px;
+  padding-left: 0;
+  list-style: none;
+}
+
+ul li {
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, var(--card-soft-bg), color-mix(in srgb, var(--card-soft-bg) 60%, var(--card-bg)));
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+ul li:hover {
+  border-color: var(--accent-color);
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.1);
 }
 
 code {
-  background: var(--card-soft-bg);
+  background: linear-gradient(135deg, var(--accent-color), var(--secondary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   border: 1px solid var(--border-color);
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
 }
