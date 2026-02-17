@@ -260,7 +260,7 @@ export default function DashbordPage() {
       }
 
       const successMessage = json.dispatch?.ok
-        ? "Lead created successfully and dispatch triggered."
+        ? "Lead created successfully."
         : `Lead created successfully, but dispatch trigger failed${json.dispatch?.error ? `: ${json.dispatch.error}` : "."}`;
 
       setManualLeadSuccess(successMessage);
