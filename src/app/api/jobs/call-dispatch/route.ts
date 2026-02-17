@@ -104,6 +104,7 @@ async function validateDispatchDbAccess(
 async function seedFollowUpsForUncalledLeads(
   supabase: ReturnType<typeof getSupabaseAdminClient>,
   runtime: ReturnType<typeof getSupabaseAdminRuntimeInfo>,
+  dispatchRunAtIso: string,
 ): Promise<number> {
 
   const leadsResponse = await supabase
@@ -142,14 +143,13 @@ async function seedFollowUpsForUncalledLeads(
 
   if (leadsToSeed.length === 0) return 0;
 
-  const now = new Date().toISOString();
   const insertResponse = await supabase.from("follow_ups").insert(
     leadsToSeed.map((lead) => ({
       id: randomUUID(),
-      created_at: now,
-      updated_at: now,
+      created_at: dispatchRunAtIso,
+      updated_at: dispatchRunAtIso,
       lead_id: lead.id,
-      due_at: now,
+      due_at: dispatchRunAtIso,
       channel: "voice_call",
       message: `Initial outbound call for ${lead.customer_name || "lead"}`,
       status: "pending" as const,
@@ -184,7 +184,7 @@ async function runDispatch(request: NextRequest): Promise<NextResponse> {
     const nowIso = new Date().toISOString();
     let seededFollowUps = 0;
     try {
-      seededFollowUps = await seedFollowUpsForUncalledLeads(supabase, runtime);
+      seededFollowUps = await seedFollowUpsForUncalledLeads(supabase, runtime, nowIso);
     } catch (error) {
       console.error("Unable to seed follow-ups; continuing with existing pending items", {
         runtime: runtimeInfoForLogs(),

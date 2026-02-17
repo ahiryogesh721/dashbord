@@ -38,6 +38,7 @@ type DispatchTriggerResult = {
   ok: boolean;
   status: number | null;
   error: string | null;
+  attempts: number;
 };
 
 function isUniqueViolation(error: PostgrestError | null): boolean {
@@ -104,6 +105,42 @@ async function triggerCallDispatch(request: Request): Promise<DispatchTriggerRes
     headers["x-n8n-secret"] = normalizedSecret;
   }
 
+  const firstAttempt = await triggerCallDispatchOnce(request, headers);
+
+  if (!firstAttempt.ok || firstAttempt.noDueFollowUps) {
+    const secondAttempt = await triggerCallDispatchOnce(request, headers);
+    if (secondAttempt.ok) {
+      return {
+        attempted: true,
+        ok: true,
+        status: secondAttempt.status,
+        error: null,
+        attempts: 2,
+      };
+    }
+
+    return {
+      attempted: true,
+      ok: false,
+      status: secondAttempt.status,
+      error: secondAttempt.error ?? firstAttempt.error,
+      attempts: 2,
+    };
+  }
+
+  return {
+    attempted: true,
+    ok: true,
+    status: firstAttempt.status,
+    error: null,
+    attempts: 1,
+  };
+}
+
+async function triggerCallDispatchOnce(
+  request: Request,
+  headers: HeadersInit,
+): Promise<{ ok: boolean; status: number | null; error: string | null; noDueFollowUps: boolean }> {
   try {
     const response = await fetch(new URL("/api/jobs/call-dispatch", request.url), {
       method: "POST",
@@ -118,35 +155,43 @@ async function triggerCallDispatch(request: Request): Promise<DispatchTriggerRes
 
     if (!response.ok) {
       return {
-        attempted: true,
         ok: false,
         status: response.status,
         error: parsedError ?? `Dispatch trigger failed with status ${response.status}`,
+        noDueFollowUps: false,
       };
     }
 
     const parsedOk = parsed && typeof parsed === "object" && "ok" in parsed ? Boolean(parsed.ok) : true;
+    const parsedData = parsed && typeof parsed === "object" && "data" in parsed ? parsed.data : null;
+    const noDueFollowUps = Boolean(
+      parsedData &&
+        typeof parsedData === "object" &&
+        "message" in parsedData &&
+        parsedData.message === "No due follow-ups",
+    );
+
     if (!parsedOk) {
       return {
-        attempted: true,
         ok: false,
         status: response.status,
         error: parsedError ?? "Dispatch trigger returned ok=false",
+        noDueFollowUps,
       };
     }
 
     return {
-      attempted: true,
       ok: true,
       status: response.status,
       error: null,
+      noDueFollowUps,
     };
   } catch (error) {
     return {
-      attempted: true,
       ok: false,
       status: null,
       error: error instanceof Error ? error.message : "Dispatch trigger request failed",
+      noDueFollowUps: false,
     };
   }
 }
